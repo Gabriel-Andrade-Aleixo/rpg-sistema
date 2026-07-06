@@ -1,0 +1,20 @@
+{
+  "name": "rpg-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js",
+    "test": "node --test",
+    "sync:system": "node scripts/sync-system-catalog.js",
+    "sync:rules": "node scripts/sync-rule-metadata.js",
+    "sync:armors": "node scripts/sync-armors.js",
+    "sync:spells": "node scripts/sync-divine-spells.js",
+    "audit:rules": "node scripts/audit-system-rules.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

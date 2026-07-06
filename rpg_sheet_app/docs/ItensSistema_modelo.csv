@@ -1,0 +1,17 @@
+id;nome;tipo;descricao;dano;tipoDano;caBonus;defesaBonus;alcance;peso;precoOuro;precoPrata;precoCobre;custoMana;custoHumanidade;bonus;observacoes;equipavel
+mana_potion;Pocao de mana;Consumivel;Recupera mana. A quantidade recuperada deve ser definida pelo mestre;;;;;;0;0;0;0;;;;Citada como uma das formas de recuperar Mana.;false
+spell_scroll;Pergaminho de feitico;Feitico;Armazena um feitico comum, espiritual ou divino.;;;;;;0;0;0;0;;;;Normalmente uso unico, exceto feiticos divinos conforme pacto.;false
+spell_stone;Pedra de feitico;Feitico;Recipiente usado para armazenar magia ativada instantaneamente.;;;;;;0;0;0;0;;;;;false
+spell_rune;Runa de feitico;Feitico;Runa preparada para armazenar e liberar um efeito magico.;;;;;;0;0;0;0;;;;;false
+grimoire;Grimorio;Ferramenta magica;Permite ao Mago escrever magias dominadas e usar reacoes magicas.;;;;;;0;0;0;0;;;;;true
+command_instrument;Instrumento de Comando;Arma especial;Instrumento magico usado pelo Maestro Tatico para impor ritmo ao combate.;;;;;;0;0;0;0;;;;;true
+sacred_scripture;Escrituras sagradas;Artefato divino;Artefato divino possivel para Clerigos.;;divino;;;;0;0;0;0;;;;;true
+blessed_symbol;Simbolo abencoado;Artefato divino;Simbolo santo vinculado a uma divindade.;;divino;;;;0;0;0;0;;;;;true
+holy_instrument;Instrumento santo;Artefato divino;Instrumento sagrado utilizado para canalizar poder divino.;;divino;;;;0;0;0;0;;;;;true
+sacred_sword;Espada sagrada;Artefato divino;Artefato divino possivel para Paladinos.;;divino;;;corpo a corpo;0;0;0;0;;;;;true
+consecrated_armor;Armadura consagrada;Artefato divino;Armadura vinculada ao Deus seguido pelo Paladino.;;divino;;;;0;0;0;0;;;;;true
+blessed_shield;Escudo abencoado;Artefato divino;Escudo sagrado usado como artefato divino.;;divino;;;;0;0;0;0;;;;;true
+war_relic;Reliquia de guerra;Artefato divino;Reliquia divina voltada a combate e punicao sagrada.;;divino;;;;0;0;0;0;;;;;true
+original_artifact;Artefato Original;Artefato divino;Artefato divino mais poderoso ligado a uma entidade.;;divino;;;;0;0;0;0;;;;;true
+demon_slaying_relic;Reliquia anti-demonio;Reliquia unica;Unica reliquia capaz de matar permanentemente um demonio sem rolagens.;;divino;;;;0;0;0;0;;;;Item unico de mundo. Nao deve ser entregue sem decisao do mestre.;true
+simple_trap_materials;Materiais de armadilha simples;Material;Materiais narrativos para armadilhas simples do Ranger.;;;;;;0;0;0;0;;;;;false

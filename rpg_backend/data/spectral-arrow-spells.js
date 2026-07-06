@@ -1,0 +1,38 @@
+const infusion = (actionId, name, manaCost, description, damage = '2d4') => ({
+  name: `Infusão: ${name}`,
+  school: 'Espectral',
+  className: 'Arqueiro Espectral',
+  topic: 'Flecha Mágica · Aprimoramentos',
+  level: 1,
+  manaCost,
+  focusCost: 1,
+  humanityCost: 0,
+  description,
+  damage,
+  range: 'Alcance do arco',
+  actionType: 'spectral_infusion',
+  actionId,
+});
+
+export const spectralArrowSpells = [
+  {
+    name: 'Flecha Mágica',
+    school: 'Espectral',
+    className: 'Arqueiro Espectral',
+    topic: 'Flecha Mágica',
+    level: 1,
+    manaCost: 0,
+    focusCost: 0,
+    humanityCost: 0,
+    description: 'Disparo mágico básico do Arqueiro Espectral. Role 2d4 para determinar o dano antes de aplicar qualquer infusão.',
+    damage: '2d4',
+    range: 'Alcance do arco',
+    actionType: 'spectral_arrow',
+    actionId: 'spectral_arrow',
+  },
+  infusion('precision', 'Precisão', 1, 'Aprimora a Flecha Mágica com +2 no teste de ataque e ignora penalidades leves.'),
+  infusion('impact', 'Impacto', 2, 'Aprimora a Flecha Mágica com +1 de dano, ou +2 de dano quando estiver com 3 Cadência.', '2d4 +1; com 3 Cadência, 2d4 +2'),
+  infusion('piercing', 'Perfurante', 2, 'Aprimora a Flecha Mágica, ignora redução leve ou moderada e causa +1 de dano.', '2d4 +1'),
+  infusion('kinetic', 'Cinética', 1, 'Aprimora a Flecha Mágica para empurrar o alvo ou aplicar -1 de movimento.'),
+  infusion('spectral', 'Espectral', 2, 'Aprimora a Flecha Mágica para causar 40% do dano mesmo quando o ataque errar.', '2d4; no erro, 40% do total'),
+];

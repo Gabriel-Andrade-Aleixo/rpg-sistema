@@ -1,0 +1,10 @@
+id;nome;tipo;papel;ameaca;descricao;ca;pv;mana;movimentoMetros;habilidades;resistencias;vulnerabilidades;observacoes
+common_spirit;Espirito comum;Espirito;Entidade de pacto;Variavel;Entidade natural ou invisivel usada em magia espiritual.;;;;;Pode conceder pactos, efeitos passivos ou reducao de custo de mana.;;;Espiritos podem recusar ajuda, impor condicoes e cobrar precos nao materiais.
+minor_demon;Demonio menor;Demonio;Pactuante ou inimigo;Media;Demonio capaz de firmar pacto e conceder magia demoniaca.;;;;;Impoe clausulas de pacto, pode causar 2d20 de dano se desobedecido.;;Magia divina de Clerigos ou Paladinos.;
+manifested_demon;Demonio manifestado;Demonio;Chefe;Mortal;Surge quando Corrupcao chega a 100 e o pactuante morre.;;;;;Surge com Vida e Mana completas, age livremente no mundo fisico.;;Nucleo deve ser destruido por Clerigo ou Paladino com Magia Divina.;
+divine_manifestation;Manifestacao divina total;Divino;Entidade;Lendaria;Estado de 0 Humanidade e 100 Divindade. O personagem torna-se injogavel.;;;;;So pode ser ferida por Magia Divina, pode destruir demonio manifestado sem testes.;Dano nao divino;;
+corrupted_creature;Criatura corrompida;Corrompido;Inimigo;Variavel;Criatura afetada por corrupcao, demonios ou poderes contrarios a uma divindade.;;;;;;;Dano divino, Purificacao divina;
+undead;Morto-vivo;Morto-vivo;Inimigo;Variavel;Alvo tipico de punicao divina e efeitos contra mortos-vivos.;;;;;;;Dano divino, julgamento divino;
+wild_beast;Fera selvagem;Fera;Criatura de caca;Baixa a alta;Animal ou monstro de terreno usado em cenas de caca, sobrevivencia e armadilhas.;;;;;;;;Atributos sugeridos no app: Destreza 2, Constituicao 2.
+enemy_soldier;Soldado inimigo;Humanoide;Combatente;Baixa a media;Modelo generico para soldados de reinos, tribos ou faccoes.;;;;;;;;Atributos sugeridos no app: Forca 2, Constituicao 2.
+divine_champion;Campeao divino;Divino;Elite;Alta;Servo, campeao ou executor de uma divindade.;;;;;Usa poderes baseados em Fe e na vontade do Deus seguido.;;;
