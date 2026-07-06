@@ -207,6 +207,13 @@ textarea { resize: vertical; }
 .spellList { display: grid; gap: 8px; }
 .spellResources { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
 .spellbookActions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; margin-bottom: 14px; }
+.spectralSpellNotice { display: grid; gap: 9px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 7px; background: var(--surface-2); }
+.spectralSpellNotice > div:first-child { display: flex; justify-content: space-between; gap: 10px; }
+.spectralSpellNotice > div:first-child span { color: var(--gold); font-weight: 750; }
+.spectralSpellNotice p { margin: 0; color: var(--muted); }
+.classSpellPresets { display: flex; flex-wrap: wrap; gap: 7px; }
+.classSpellPresets button { display: inline-flex; align-items: center; gap: 6px; }
+.classSpellPresets svg { width: 15px; height: 15px; }
 .catalogSpellPicker { border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); }
 .catalogSpellPicker > summary { padding: 11px 12px; color: var(--ink); font-weight: 750; cursor: pointer; }
 .catalogSpellPicker > label { padding: 0 11px 10px; }

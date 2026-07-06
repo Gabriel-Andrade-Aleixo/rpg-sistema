@@ -8,6 +8,11 @@ export const spectralInfusions = [
   { id: 'spectral', name: 'Espectral', manaCost: 2, focusCost: 1, effect: 'Se errar o ataque, causa 40% do dano.' },
 ];
 
+export const spectralSpellPresets = [
+  { name: 'Flecha Mágica', type: 'Espectral', topic: 'Flecha Mágica', description: 'Disparo mágico básico do Arqueiro Espectral. Role 2d4 para determinar o dano.', damage: '2d4', range: 'Alcance do arco', manaCost: 0, focusCost: 0, humanityCost: 0, actionType: 'spectral_arrow', actionId: 'spectral_arrow' },
+  ...spectralInfusions.map((infusion) => ({ name: `Infusão: ${infusion.name}`, type: 'Espectral', topic: 'Flecha Mágica · Aprimoramentos', description: infusion.effect, damage: infusion.id === 'impact' ? '2d4 +1; com 3 Cadência, 2d4 +2' : infusion.id === 'piercing' ? '2d4 +1' : infusion.id === 'spectral' ? '2d4; no erro, 40% do total' : '2d4', range: 'Alcance do arco', manaCost: infusion.manaCost, focusCost: infusion.focusCost, humanityCost: 0, actionType: 'spectral_infusion', actionId: infusion.id })),
+];
+
 export function magicArrowDamage(firstDie = null, secondDie = null) {
   const d1 = firstDie === null ? Math.floor(Math.random() * 4) + 1 : Math.min(4, Math.max(1, Number(firstDie) || 1));
   const d2 = secondDie === null ? Math.floor(Math.random() * 4) + 1 : Math.min(4, Math.max(1, Number(secondDie) || 1));

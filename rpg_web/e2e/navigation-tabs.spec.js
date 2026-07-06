@@ -22,6 +22,8 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
       { id: 'skill_stealth', name: 'Furtividade', category: 'Pericias', description: 'Destreza 100%' },
       { id: 'armor_leather', name: 'Armadura de Couro', category: 'Equipamentos', description: rules({ type: 'item', modifiers: [{ targetType: 'stat', targetId: 'defense', value: 1 }] }), labels: [{ name: 'Armadura' }, { name: 'Armadura Leve' }] },
       { id: 'spell_solar', name: 'Sentença Solar', category: 'Magias', description: `Feixe de luz divina.\n${rules({ type: 'spell', school: 'divina', topic: 'Grau 1 · Utilidade e punição', costs: { mana: 1, focus: 0, humanity: 3 }, damage: '1d8 + Fé', range: 'Um inimigo' })}`, labels: [{ name: 'Magia: Divina' }, { name: 'Grau 1 · Utilidade e punição' }] },
+      { id: 'spell_arrow', name: 'Flecha Mágica', category: 'Magias', description: `Disparo mágico básico com dano 2d4.\n${rules({ type: 'spell', school: 'espectral', className: 'Arqueiro Espectral', topic: 'Flecha Mágica', costs: { mana: 0, focus: 0, humanity: 0 }, damage: '2d4', actionType: 'spectral_arrow', actionId: 'spectral_arrow' })}` },
+      { id: 'spell_impact', name: 'Infusão: Impacto', category: 'Magias', description: `Aprimora a Flecha Mágica.\n${rules({ type: 'spell', school: 'espectral', className: 'Arqueiro Espectral', topic: 'Flecha Mágica · Aprimoramentos', costs: { mana: 2, focus: 1, humanity: 0 }, damage: '2d4 +1', actionType: 'spectral_infusion', actionId: 'impact' })}` },
     ],
   };
 
@@ -61,6 +63,13 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await solarSpell.getByLabel('Tópico de Sentença Solar').fill('Favoritas');
   await solarSpell.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.locator('.spellTopics').getByRole('heading', { name: 'Favoritas' })).toBeVisible();
+  await page.locator('.classSpellPresets').getByRole('button', { name: 'Flecha Mágica', exact: true }).click();
+  await page.locator('.classSpellPresets').getByRole('button', { name: 'Infusão: Impacto', exact: true }).click();
+  const magicArrow = page.locator('.spellList article').filter({ has: page.getByText('Flecha Mágica', { exact: true }) });
+  await expect(magicArrow).toContainText('2d4');
+  await page.getByLabel('Resultado dos 2d4').fill('7');
+  await page.locator('.spellList article').filter({ hasText: 'Infusão: Impacto' }).getByRole('button', { name: 'Usar com sucesso' }).click();
+  await expect(page.locator('.spellResources .metric').filter({ hasText: 'Mana' })).toContainText('18/31');
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('grimorio-mobile.png'), fullPage: true });
@@ -72,8 +81,8 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await page.getByRole('button', { name: 'Concluir' }).click();
 
   await page.getByRole('button', { name: 'Combate' }).click();
-  await expect(page.getByText('Flechas mágicas do Arqueiro Espectral')).toBeVisible();
-  await expect(page.getByText('Flecha Espectral')).toBeVisible();
+  await expect(page.getByText('Flecha Mágica e infusões')).toBeVisible();
+  await expect(page.getByText('Infusão: Espectral')).toBeVisible();
 
   await page.getByRole('button', { name: 'Evolução' }).click();
   await expect(page.getByLabel('Área de experiência')).toBeVisible();

@@ -4,7 +4,7 @@ import { catalogGroups, displayDescription, findEntry, parseRuleMetadata } from 
 import RpgImage from './RpgImage';
 
 const emptyItem = { name: '', type: 'Armadura', armorCategory: 'Leve', description: '', bonusTarget: 'defense', bonusValue: 1, weight: 0, imageUrl: '' };
-const emptySpell = { name: '', school: 'Arcana', topic: 'Sem tópico', className: '', level: 0, description: '', manaCost: 0, focusCost: 0, humanityCost: 0, range: '', damage: '', imageUrl: '' };
+const emptySpell = { name: '', school: 'Arcana', topic: 'Sem tópico', className: '', actionType: '', actionId: '', level: 0, description: '', manaCost: 0, focusCost: 0, humanityCost: 0, range: '', damage: '', imageUrl: '' };
 
 export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem }) {
   const [tab, setTab] = useState('overview');
@@ -131,7 +131,7 @@ function itemFromEntry(entry) {
 function spellFromEntry(entry) {
   const metadata = parseRuleMetadata(entry) || {};
   const schools = { arcana: 'Arcana', divina: 'Divina', espectral: 'Espectral', elemental: 'Elemental', demoniaca: 'Demoníaca', natural: 'Natural', outra: 'Outra' };
-  return { ...emptySpell, name: entry.name, school: schools[metadata.school] || 'Outra', topic: metadata.topic || 'Sem tópico', className: metadata.className || '', level: Number(metadata.level || 0), description: summaryFromEntry(entry), manaCost: Number(metadata.costs?.mana || 0), focusCost: Number(metadata.costs?.focus || 0), humanityCost: Number(metadata.costs?.humanity || 0), range: metadata.range || '', damage: metadata.damage || '', imageUrl: entry.imageUrl || '' };
+  return { ...emptySpell, name: entry.name, school: schools[metadata.school] || 'Outra', topic: metadata.topic || 'Sem tópico', className: metadata.className || '', actionType: metadata.actionType || '', actionId: metadata.actionId || '', level: Number(metadata.level || 0), description: summaryFromEntry(entry), manaCost: Number(metadata.costs?.mana || 0), focusCost: Number(metadata.costs?.focus || 0), humanityCost: Number(metadata.costs?.humanity || 0), range: metadata.range || '', damage: metadata.damage || '', imageUrl: entry.imageUrl || '' };
 }
 
 function summaryFromEntry(entry) {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { infusionDamage, infusionManaCost, spectralInfusions, useInfusion, useSpell } from '../lib/classActions.js';
+import { infusionDamage, infusionManaCost, magicArrowDamage, spectralInfusions, useInfusion, useMagicArrow, useSpell } from '../lib/classActions.js';
 import { changeHitPoints, recordDeathSave } from '../lib/deathSaves.js';
 import { emptyCharacter } from '../lib/rpgData.js';
 
@@ -35,6 +35,16 @@ test('flechas mágicas calculam dano e penalidade de múltiplos ataques', () => 
   assert.deepEqual(infusionDamage(impact, 8, 3), { hit: 10, miss: 0 });
   assert.deepEqual(infusionDamage(spectral, 9, 0), { hit: 9, miss: 3 });
   assert.equal(infusionManaCost(impact, 3, 3), 2);
+});
+
+test('Flecha Mágica causa 2d4 e a infusão aprimora o mesmo disparo', () => {
+  assert.deepEqual(magicArrowDamage(3, 4), { dice: [3, 4], total: 7 });
+  const spell = { id: 'arrow', successfulUses: 0 };
+  const character = { ...emptyCharacter(), spells: [spell] };
+  const result = useMagicArrow(character, spell, { successful: true, dice: magicArrowDamage(2, 4) });
+  assert.equal(result.damage.total, 6);
+  assert.match(result.character.actionHistory[0].result, /2d4 = 2 \+ 4 = 6/);
+  assert.equal(result.character.spells[0].successfulUses, 1);
 });
 
 test('magia registra terceiro sucesso e desconta recursos', () => {
