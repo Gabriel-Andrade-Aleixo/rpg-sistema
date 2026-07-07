@@ -148,7 +148,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       ],
       1 => <Widget>[
         if (normalizeCatalogText(_class?.name ?? '') == 'arqueiro espectral')
-          SectionCard(title: 'Flechas mágicas', child: _infusionSection()),
+          SectionCard(title: 'Flecha Mágica', child: _infusionSection()),
         SectionCard(title: 'Atributos', child: _attributeSection()),
         SectionCard(
           title: 'Proficiências e perícias',
@@ -506,27 +506,97 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text(
-        'Informe o dano obtido com o arco. A ficha aplica a infusão, a Cadência e a penalidade por múltiplos ataques.',
+        'A Flecha Mágica causa 2d4 de dano. As infusões abaixo aprimoram esse único disparo e aplicam Cadência, Mana e Foco.',
       ),
       const SizedBox(height: 10),
       for (final infusion in ClassActionService.infusions)
         Card(
           child: ListTile(
-            title: Text('Flecha ${infusion.name}'),
+            title: Text('Infusão: ${infusion.name}'),
             subtitle: Text(
               '${infusion.effect}\n${_infusionDamageLabel(infusion)}\n${_infusionManaCost(infusion)} PM · ${infusion.focusCost} Foco',
             ),
             isThreeLine: true,
             trailing: FilledButton(
               onPressed: () => _useInfusion(infusion),
-              child: const Text('Usar'),
+              child: const Text('Aplicar'),
             ),
           ),
         ),
     ],
   );
 
+  List<CharacterSpell> get _spectralSpellPresets => [
+    CharacterSpell(
+      id: 'preset_spectral_arrow',
+      name: 'Flecha Mágica',
+      type: 'Espectral',
+      topic: 'Flecha Mágica',
+      description:
+          'Disparo mágico básico do Arqueiro Espectral. Role 2d4 para determinar o dano.',
+      damage: '2d4',
+      range: 'Alcance do arco',
+      actionType: 'spectral_arrow',
+      actionId: 'spectral_arrow',
+      createdAt: DateTime.now(),
+    ),
+    for (final infusion in ClassActionService.infusions)
+      CharacterSpell(
+        id: 'preset_${infusion.id}',
+        name: 'Infusão: ${infusion.name}',
+        type: 'Espectral',
+        topic: 'Flecha Mágica · Aprimoramentos',
+        description: infusion.effect,
+        manaCost: infusion.manaCost,
+        focusCost: infusion.focusCost,
+        damage: switch (infusion.id) {
+          'impact' => '2d4 +1; com 3 Cadência, 2d4 +2',
+          'piercing' => '2d4 +1',
+          'spectral' => '2d4; no erro, 40% do total',
+          _ => '2d4',
+        },
+        range: 'Alcance do arco',
+        actionType: 'spectral_infusion',
+        actionId: infusion.id,
+        createdAt: DateTime.now(),
+      ),
+  ];
+
+  Future<void> _addSpectralPreset(CharacterSpell preset) => _persist(
+    _character.copyWith(
+      spells: [
+        CharacterSpell(
+          id: newId('spell'),
+          name: preset.name,
+          type: preset.type,
+          topic: preset.topic,
+          description: preset.description,
+          manaCost: preset.manaCost,
+          focusCost: preset.focusCost,
+          humanityCost: preset.humanityCost,
+          damage: preset.damage,
+          range: preset.range,
+          actionType: preset.actionType,
+          actionId: preset.actionId,
+          createdAt: DateTime.now(),
+        ),
+        ..._character.spells,
+      ],
+    ),
+  );
+
   Widget _spellbookSection() {
+    final spectralArcher =
+        normalizeCatalogText(_class?.name ?? '') == 'arqueiro espectral';
+    final ownedActionIds = _character.spells
+        .map((spell) => spell.actionId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final availableClassSpells = spectralArcher
+        ? _spectralSpellPresets
+              .where((spell) => !ownedActionIds.contains(spell.actionId))
+              .toList()
+        : <CharacterSpell>[];
     final grouped = <String, List<CharacterSpell>>{};
     for (final spell in _character.spells) {
       final topic = spell.topic.trim().isEmpty ? 'Sem tópico' : spell.topic;
@@ -554,6 +624,46 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ],
         ),
         const SizedBox(height: 12),
+        if (spectralArcher) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              border: Border(
+                left: BorderSide(
+                  color: Theme.of(context).colorScheme.tertiary,
+                  width: 3,
+                ),
+              ),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Flecha Mágica: 2d4 de dano. Precisão, Impacto, Perfurante, Cinética e Espectral são infusões mágicas que aprimoram esse mesmo disparo.',
+                ),
+                if (availableClassSpells.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      for (final spell in availableClassSpells)
+                        OutlinedButton.icon(
+                          onPressed: () => _addSpectralPreset(spell),
+                          icon: const Icon(Icons.add),
+                          label: Text(spell.name),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
             Expanded(
@@ -802,19 +912,19 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
 
   String _infusionDamageLabel(SpectralInfusion infusion) =>
       switch (infusion.id) {
-        'impact' => 'Dano: base do arco +1; +2 com 3 Cadência',
-        'piercing' => 'Dano: base do arco +1',
-        'spectral' => 'Dano: base do arco; no erro, 40% arredondado para baixo',
-        _ => 'Dano: base do arco',
+        'impact' => 'Dano: 2d4 +1; +2 com 3 Cadência',
+        'piercing' => 'Dano: 2d4 +1',
+        'spectral' => 'Dano: 2d4; no erro, 40% arredondado para baixo',
+        _ => 'Dano: 2d4',
       };
 
   Future<void> _useInfusion(SpectralInfusion infusion) async {
-    final baseDamage = TextEditingController(text: '0');
+    final baseDamage = TextEditingController(text: '2');
     final attacks = TextEditingController(text: '1');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Usar Flecha ${infusion.name}'),
+        title: Text('Aplicar Infusão ${infusion.name}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -823,7 +933,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
               autofocus: true,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: 'Dano obtido com o arco',
+                labelText: 'Resultado dos 2d4 da Flecha Mágica',
               ),
             ),
             const SizedBox(height: 12),
@@ -844,7 +954,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Usar flecha'),
+            child: const Text('Aplicar infusão'),
           ),
         ],
       ),
@@ -877,6 +987,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         .map((spell) => spell.catalogId)
         .where((id) => id.isNotEmpty)
         .toSet();
+    final ownedActions = _character.spells
+        .map((spell) => spell.actionId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
     final selected = await showModalBottomSheet<CatalogEntry>(
       context: context,
       isScrollControlled: true,
@@ -885,11 +999,20 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           final normalizedQuery = normalizeCatalogText(query);
           final available = widget.catalog.spells
               .where(
-                (entry) =>
-                    !owned.contains(entry.id) &&
-                    normalizeCatalogText(
-                      '${entry.name} ${entry.description} ${entry.labels.map((label) => label.name).join(' ')}',
-                    ).contains(normalizedQuery),
+                (entry) {
+                  final metadata = _ruleMetadata(entry);
+                  final className = metadata['className']?.toString() ?? '';
+                  final actionId = metadata['actionId']?.toString() ?? '';
+                  final allowedClass = className.isEmpty ||
+                      normalizeCatalogText(className) ==
+                          normalizeCatalogText(_class?.name ?? '');
+                  return allowedClass &&
+                      (actionId.isEmpty || !ownedActions.contains(actionId)) &&
+                      !owned.contains(entry.id) &&
+                      normalizeCatalogText(
+                        '${entry.name} ${entry.description} ${entry.labels.map((label) => label.name).join(' ')}',
+                      ).contains(normalizedQuery);
+                },
               )
               .toList();
           return SafeArea(
@@ -992,6 +1115,8 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       range: metadata['range']?.toString() ?? '',
       damage: metadata['damage']?.toString() ?? '',
       imageUrl: entry.imageUrl,
+      actionType: metadata['actionType']?.toString() ?? '',
+      actionId: metadata['actionId']?.toString() ?? '',
       createdAt: DateTime.now(),
     );
   }
@@ -1064,10 +1189,98 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
   }
 
   Future<void> _castSpell(CharacterSpell spell, bool successful) async {
+    if (spell.actionType == 'spectral_arrow') {
+      final result = _classActions.useMagicArrow(
+        _character,
+        spell,
+        successful: successful,
+      );
+      await _persist(result.character);
+      return;
+    }
+    if (spell.actionType == 'spectral_infusion') {
+      await _castSpectralInfusion(spell, successful);
+      return;
+    }
     final result = _classActions.useSpell(
       _character,
       spell,
       successful: successful,
+    );
+    if (!result.succeeded) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.error)));
+      }
+      return;
+    }
+    await _persist(result.character);
+  }
+
+  Future<void> _castSpectralInfusion(
+    CharacterSpell spell,
+    bool successful,
+  ) async {
+    final infusion = ClassActionService.infusions
+        .where((item) => item.id == spell.actionId)
+        .firstOrNull;
+    if (infusion == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Infusão do catálogo não encontrada.')),
+      );
+      return;
+    }
+    final damage = TextEditingController(text: '2');
+    final attacks = TextEditingController(text: '1');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Aplicar Infusão ${infusion.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: damage,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Resultado dos 2d4 da Flecha Mágica',
+              ),
+            ),
+            TextField(
+              controller: attacks,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Ataques realizados no turno',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+    final baseDamage = (int.tryParse(damage.text) ?? 2).clamp(2, 8);
+    final attackCount = (int.tryParse(attacks.text) ?? 1).clamp(1, 99);
+    damage.dispose();
+    attacks.dispose();
+    if (confirmed != true) return;
+    final result = _classActions.useInfusion(
+      _character,
+      infusion,
+      baseDamage: baseDamage,
+      attacksThisTurn: attackCount,
+      successful: successful,
+      spellId: spell.id,
     );
     if (!result.succeeded) {
       if (mounted) {

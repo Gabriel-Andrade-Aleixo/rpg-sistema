@@ -71,6 +71,30 @@ void main() {
     expect(service.infusionManaCost(impact, 3, 3), 2);
   });
 
+  test('Flecha Mágica causa 2d4 antes de receber uma infusão', () {
+    const service = ClassActionService();
+    final damage = service.magicArrowDamage(3, 4);
+    final spell = CharacterSpell(
+      id: 'magic_arrow',
+      name: 'Flecha Mágica',
+      type: 'Espectral',
+      actionType: 'spectral_arrow',
+      actionId: 'spectral_arrow',
+      damage: '2d4',
+      createdAt: DateTime(2026),
+    );
+    final result = service.useMagicArrow(
+      character().copyWith(spells: [spell]),
+      spell,
+      successful: true,
+      firstDie: 3,
+      secondDie: 4,
+    );
+    expect(damage.total, 7);
+    expect(result.character.actionHistory.first.result, contains('2d4 = 3 + 4 = 7'));
+    expect(result.character.spells.first.successfulUses, 1);
+  });
+
   test('magia oficial preserva tópico e desconta mana e humanidade', () {
     const service = ClassActionService();
     final spell = CharacterSpell(

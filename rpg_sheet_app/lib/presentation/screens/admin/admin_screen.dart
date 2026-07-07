@@ -648,6 +648,8 @@ class _AdminScreenState extends State<AdminScreen> {
                               'level': int.tryParse(level.text) ?? 0,
                               'topic': topic.text.trim(),
                               'className': className.text.trim(),
+                              'actionType': metadata['actionType'] ?? '',
+                              'actionId': metadata['actionId'] ?? '',
                               'manaCost': int.tryParse(mana.text) ?? 0,
                               'focusCost': int.tryParse(focus.text) ?? 0,
                               'humanityCost': int.tryParse(humanity.text) ?? 0,

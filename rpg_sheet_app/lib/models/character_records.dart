@@ -309,6 +309,8 @@ class CharacterSpell {
     this.range = '',
     this.damage = '',
     this.imageUrl = '',
+    this.actionType = '',
+    this.actionId = '',
   });
 
   final String id;
@@ -324,6 +326,8 @@ class CharacterSpell {
   final String range;
   final String damage;
   final String imageUrl;
+  final String actionType;
+  final String actionId;
   final DateTime createdAt;
 
   bool get mastered => successfulUses >= 3;
@@ -342,6 +346,8 @@ class CharacterSpell {
     'range': range,
     'damage': damage,
     'imageUrl': imageUrl,
+    'actionType': actionType,
+    'actionId': actionId,
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -360,6 +366,8 @@ class CharacterSpell {
     range: json['range']?.toString() ?? '',
     damage: json['damage']?.toString() ?? '',
     imageUrl: json['imageUrl']?.toString() ?? '',
+    actionType: json['actionType']?.toString() ?? '',
+    actionId: json['actionId']?.toString() ?? '',
     createdAt:
         DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
         DateTime.now(),
@@ -380,6 +388,8 @@ class CharacterSpell {
         range: range,
         damage: damage,
         imageUrl: imageUrl,
+        actionType: actionType,
+        actionId: actionId,
         createdAt: createdAt,
       );
 }

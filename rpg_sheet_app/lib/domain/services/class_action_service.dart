@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../../models/character.dart';
 import '../../models/character_records.dart';
 import '../../utils/id_generator.dart';
@@ -55,6 +57,16 @@ class ClassActionService {
     ),
   ];
 
+  ({List<int> dice, int total}) magicArrowDamage([
+    int? firstDie,
+    int? secondDie,
+  ]) {
+    final random = Random();
+    final first = (firstDie ?? random.nextInt(4) + 1).clamp(1, 4);
+    final second = (secondDie ?? random.nextInt(4) + 1).clamp(1, 4);
+    return (dice: [first, second], total: first + second);
+  }
+
   int infusionManaCost(
     SpectralInfusion infusion,
     int cadence,
@@ -87,6 +99,8 @@ class ClassActionService {
     SpectralInfusion infusion, {
     int baseDamage = 0,
     int attacksThisTurn = 1,
+    bool successful = true,
+    String spellId = '',
   }) {
     final cadence = character.resources['cadenciaCurrent'] ?? 0;
     final manaCost = infusionManaCost(infusion, cadence, attacksThisTurn);
@@ -110,13 +124,57 @@ class ClassActionService {
           ...character.resources,
           'focoCurrent': focus - infusion.focusCost,
         },
+        spells: character.spells
+            .map(
+              (spell) => spell.id == spellId
+                  ? spell.copyWith(
+                      successfulUses:
+                          spell.successfulUses + (successful ? 1 : 0),
+                    )
+                  : spell,
+            )
+            .toList(),
         actionHistory: [
           ActionUseRecord(
             id: newId('action'),
-            name: 'Flecha mágica · ${infusion.name}',
+            name: 'Flecha Mágica · Infusão ${infusion.name}',
             manaSpent: manaCost,
             focusSpent: infusion.focusCost,
-            result: result,
+            result: '${successful ? 'Sucesso' : 'Falha'}. $result',
+            createdAt: DateTime.now(),
+          ),
+          ...character.actionHistory,
+        ].take(30).toList(),
+      ),
+    );
+  }
+
+  ClassActionResult useMagicArrow(
+    Character character,
+    CharacterSpell spell, {
+    required bool successful,
+    int? firstDie,
+    int? secondDie,
+  }) {
+    final damage = magicArrowDamage(firstDie, secondDie);
+    return ClassActionResult(
+      character.copyWith(
+        spells: character.spells
+            .map(
+              (item) => item.id == spell.id
+                  ? item.copyWith(
+                      successfulUses:
+                          item.successfulUses + (successful ? 1 : 0),
+                    )
+                  : item,
+            )
+            .toList(),
+        actionHistory: [
+          ActionUseRecord(
+            id: newId('action'),
+            name: 'Flecha Mágica',
+            result:
+                '${successful ? 'Sucesso' : 'Falha'} · 2d4 = ${damage.dice.join(' + ')} = ${damage.total} de dano',
             createdAt: DateTime.now(),
           ),
           ...character.actionHistory,
