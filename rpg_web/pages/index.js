@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, Crown, Moon, Pencil, Plus, Shield, Sun, Trash2 } from 'lucide-react';
 import { createCatalogItem, createCatalogSpell, deleteCatalogEntry, deleteCharacter, listCharacters, loadCatalog, saveCharacter, updateCatalogEntry } from '../lib/api';
 import { emptyCharacter } from '../lib/rpgData';
 import { findEntry, migrateCharacter } from '../lib/catalogEngine';
+import { changedCharacterFields, compactCharacter } from '../lib/characterSync';
 import AdminView from '../components/AdminView';
 import CatalogView from '../components/CatalogView';
 import CharacterSheet from '../components/CharacterSheet';
@@ -21,6 +22,10 @@ export default function Home() {
   const [error, setError] = useState('');
   const [theme, setTheme] = useState('dark');
   const [diceRequest, setDiceRequest] = useState(null);
+  const savedCharacters = useRef(new Map());
+  const pendingCharacters = useRef(new Map());
+  const saveTimers = useRef(new Map());
+  const saveChains = useRef(new Map());
   const selected = useMemo(() => characters.find((item) => item.id === selectedId) || null, [characters, selectedId]);
 
   async function load(refresh = false, preferredId = selectedId) {
@@ -29,6 +34,7 @@ export default function Home() {
     try {
       const [rawCharacters, nextCatalog] = await Promise.all([listCharacters(), loadCatalog(refresh)]);
       const migrated = rawCharacters.map((item) => migrateCharacter(item, nextCatalog));
+      savedCharacters.current = new Map(migrated.map((item) => [item.id, structuredClone(item)]));
       setCatalog(nextCatalog);
       setCharacters(migrated);
       const nextId = preferredId && migrated.some((item) => item.id === preferredId) ? preferredId : '';
@@ -50,6 +56,10 @@ export default function Home() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('rpg-theme', theme);
   }, [theme]);
+
+  useEffect(() => () => {
+    for (const timer of saveTimers.current.values()) clearTimeout(timer);
+  }, []);
 
   function requestRoll(request, callback) {
     setDiceRequest({ ...request, callback });
@@ -78,11 +88,12 @@ export default function Home() {
     setError('');
     try {
       const persisted = await saveCharacter(character);
-      setCharacters((current) => [...current.filter((item) => item.id !== persisted.id), migrateCharacter(persisted, catalog)]);
+      const migrated = migrateCharacter(persisted, catalog);
+      savedCharacters.current.set(persisted.id, structuredClone(migrated));
+      setCharacters((current) => [...current.filter((item) => item.id !== persisted.id), migrated]);
       setSelectedId(persisted.id);
       setDraft(null);
       setView('sheet');
-      await load(false, persisted.id);
     } catch (reason) {
       setError(reason.message);
     } finally {
@@ -90,19 +101,64 @@ export default function Home() {
     }
   }
 
-  async function updateCharacter(character) {
-    const compact = { ...character, rollHistory: (character.rollHistory || []).slice(0, 20), experienceHistory: (character.experienceHistory || []).slice(0, 20), classXpHistory: (character.classXpHistory || []).slice(0, 20), humanityHistory: (character.humanityHistory || []).slice(0, 20) };
+  function updateCharacter(character) {
+    const compact = compactCharacter(character);
     setCharacters((current) => current.map((item) => item.id === compact.id ? compact : item));
-    try {
-      const persisted = await saveCharacter(compact);
-      setCharacters((current) => current.map((item) => item.id === persisted.id ? migrateCharacter(persisted, catalog) : item));
-    } catch (reason) { setError(reason.message); }
+    pendingCharacters.current.set(compact.id, compact);
+    scheduleCharacterSave(compact.id);
+  }
+
+  function scheduleCharacterSave(id, delay = 1200) {
+    clearTimeout(saveTimers.current.get(id));
+    saveTimers.current.set(id, setTimeout(() => flushCharacterSave(id), delay));
+  }
+
+  function flushCharacterSave(id) {
+    clearTimeout(saveTimers.current.get(id));
+    saveTimers.current.delete(id);
+    const previousChain = saveChains.current.get(id) || Promise.resolve();
+    const nextChain = previousChain.then(async () => {
+      const pending = pendingCharacters.current.get(id);
+      if (!pending) return;
+      pendingCharacters.current.delete(id);
+      const previous = savedCharacters.current.get(id);
+      const changedFields = changedCharacterFields(previous, pending);
+      if (!changedFields.length) return;
+      try {
+        const persisted = migrateCharacter(await saveCharacter(pending, {
+          baseRevision: previous?.syncRevision || 0,
+          changedFields,
+        }), catalog);
+        savedCharacters.current.set(id, structuredClone(persisted));
+        setCharacters((current) => current.map((item) => item.id === id
+          ? { ...item, syncRevision: persisted.syncRevision, updatedAt: persisted.updatedAt }
+          : item));
+        setError('');
+      } catch (reason) {
+        const retryable = !reason.status || reason.status === 429 || reason.status >= 500;
+        if (retryable) {
+          if (!pendingCharacters.current.has(id)) pendingCharacters.current.set(id, pending);
+          setError(`A ficha ficou salva neste dispositivo e será sincronizada novamente. ${reason.message}`);
+          scheduleCharacterSave(id, 4000);
+        } else {
+          setError(`A alteração continua nesta tela, mas não pôde ser sincronizada. ${reason.message}`);
+        }
+      }
+      if (pendingCharacters.current.has(id)) scheduleCharacterSave(id);
+    });
+    const trackedChain = nextChain.finally(() => {
+      if (saveChains.current.get(id) === trackedChain) saveChains.current.delete(id);
+    });
+    saveChains.current.set(id, trackedChain);
   }
 
   async function removeCharacter(character) {
     if (!window.confirm(`Excluir ${character.name || 'personagem'}?`)) return;
     try {
       await deleteCharacter(character.id);
+      clearTimeout(saveTimers.current.get(character.id));
+      pendingCharacters.current.delete(character.id);
+      savedCharacters.current.delete(character.id);
       const remaining = characters.filter((item) => item.id !== character.id);
       setCharacters(remaining);
       setSelectedId(remaining[0]?.id || '');

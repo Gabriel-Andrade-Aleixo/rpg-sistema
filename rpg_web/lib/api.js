@@ -5,9 +5,17 @@ async function request(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   });
-  const data = await response.json();
+  const text = await response.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: `Backend respondeu em formato inválido (${response.status}).` };
+  }
   if (!response.ok || data.ok !== true) {
-    throw new Error(data.error || `Backend respondeu ${response.status}`);
+    const error = new Error(data.error || `Backend respondeu ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -55,10 +63,14 @@ export async function deleteCatalogEntry(kind, id) {
   return request(`/catalog/${resource}/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-export async function saveCharacter(character) {
+export async function saveCharacter(character, { baseRevision, changedFields } = {}) {
   const data = await request('/characters', {
     method: 'POST',
-    body: JSON.stringify({ character: { ...character, updatedAt: new Date().toISOString() } }),
+    body: JSON.stringify({
+      character: { ...character, updatedAt: new Date().toISOString() },
+      ...(Number.isInteger(baseRevision) ? { baseRevision } : {}),
+      ...(changedFields?.length ? { changedFields } : {}),
+    }),
   });
   if (!data.character?.id) throw new Error('O backend não confirmou a ficha salva.');
   return data.character;
