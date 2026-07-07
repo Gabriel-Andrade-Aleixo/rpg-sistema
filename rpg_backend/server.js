@@ -9,13 +9,16 @@ const TRELLO_TOKEN = process.env.TRELLO_TOKEN || '';
 const TRELLO_BOARD_NAME = process.env.TRELLO_BOARD_NAME || 'GERENCIAMENTO RPG';
 const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID || '';
 const TRELLO_BASE_URL = 'https://api.trello.com';
+const TRELLO_DESCRIPTION_LIMIT = 16384;
+const SAFE_DESCRIPTION_LIMIT = 15800;
+const characterWriteQueues = new Map();
 
 let resolvedBoardId = TRELLO_BOARD_ID;
 let charactersListId = '';
 let catalogCache = null;
 let catalogCachedAt = 0;
 
-const server = http.createServer(async (req, res) => {
+export async function requestHandler(req, res) {
   setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
@@ -84,7 +87,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && path === '/characters') {
       const body = await readJson(req);
-      const character = await saveCharacter(body.character);
+      const character = await saveCharacter(body.character, {
+        baseRevision: body.baseRevision,
+        changedFields: body.changedFields,
+      });
       return sendJson(res, 200, { ok: true, character });
     }
 
@@ -95,16 +101,23 @@ const server = http.createServer(async (req, res) => {
 
     return sendJson(res, 404, { ok: false, error: 'Rota nao encontrada.' });
   } catch (error) {
-    return sendJson(res, 500, {
+    return sendJson(res, error?.statusCode || 500, {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      ...(error?.details ? { details: error.details } : {}),
     });
   }
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`RPG backend ouvindo em http://localhost:${PORT}`);
-});
+const server = http.createServer(requestHandler);
+
+if (!process.env.VERCEL) {
+  server.listen(PORT, () => {
+    console.log(`RPG backend ouvindo em http://localhost:${PORT}`);
+  });
+}
+
+export default requestHandler;
 
 function loadDotEnv() {
   if (!fs.existsSync('.env')) return;
@@ -124,6 +137,7 @@ function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
 }
 
 function sendJson(res, status, payload) {
@@ -133,7 +147,12 @@ function sendJson(res, status, payload) {
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 1024 * 1024) throw new AppError('Requisição maior que 1 MB.', 413);
+    chunks.push(chunk);
+  }
   if (chunks.length === 0) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
@@ -159,10 +178,36 @@ async function trello(method, path, query = {}) {
     options.body = JSON.stringify(query);
   }
 
-  const response = await fetch(url, options);
-  const text = await response.text();
-  if (!response.ok) throw new Error(`Trello respondeu ${response.status}: ${text}`);
-  return text ? JSON.parse(text) : null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, options);
+    const text = await response.text();
+    if (response.ok) return text ? JSON.parse(text) : null;
+    if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+      const retryAfter = Number(response.headers.get('retry-after')) || 0;
+      await delay(Math.max(retryAfter * 1000, 350 * (2 ** attempt)));
+      continue;
+    }
+    const descError = response.status === 400 && /invalid value for desc/i.test(text);
+    throw new AppError(
+      descError
+        ? 'A ficha excedeu o limite aceito pelo Trello mesmo após a compactação.'
+        : `Trello respondeu ${response.status}: ${text}`,
+      descError ? 413 : 502,
+    );
+  }
+  throw new AppError('O Trello não respondeu após três tentativas.', 503);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+class AppError extends Error {
+  constructor(message, statusCode = 500, details = null) {
+    super(message);
+    this.statusCode = statusCode;
+    this.details = details;
+  }
 }
 
 async function ensureBoard() {
@@ -538,24 +583,33 @@ async function getCharacter(id) {
   return characters.find((character) => character.id === id) || null;
 }
 
-async function saveCharacter(character) {
+async function saveCharacter(character, options = {}) {
   if (!character || !character.id) throw new Error('Personagem sem id.');
-  const listId = await ensureList('Personagens');
-  const card = await findCharacterCard(character.id);
-  const payload = {
-    name: character.name || 'Personagem sem nome',
-    desc: characterDescription(character),
-  };
-  if (card) {
-    await trello('PUT', `/1/cards/${card.id}`, payload);
-  } else {
-    await trello('POST', '/1/cards', { idList: listId, ...payload });
-  }
-  const persisted = await getCharacter(character.id);
-  if (!persisted) {
-    throw new Error('O Trello recebeu a ficha, mas ela não pôde ser relida.');
-  }
-  return persisted;
+  return enqueueCharacterWrite(character.id, async () => {
+    const listId = await ensureList('Personagens');
+    const card = await findCharacterCard(character.id);
+    const current = card ? characterFromCard(card) : null;
+    const merged = mergeCharacterUpdate(current, character, options.changedFields);
+    const currentRevision = Number(current?.syncRevision || 0);
+    const incomingRevision = Number(character.syncRevision || options.baseRevision || 0);
+    const persisted = prepareCharacterForStorage({
+      ...merged,
+      id: character.id,
+      syncRevision: Math.max(currentRevision, incomingRevision) + 1,
+      updatedAt: new Date().toISOString(),
+    });
+    const description = characterDescription(persisted);
+    const payload = {
+      name: sanitizeText(persisted.name || 'Personagem sem nome', 120),
+      desc: description,
+    };
+    if (card) {
+      await trello('PUT', `/1/cards/${card.id}`, payload);
+    } else {
+      await trello('POST', '/1/cards', { idList: listId, ...payload });
+    }
+    return persisted;
+  });
 }
 
 async function deleteCharacter(id) {
@@ -577,26 +631,138 @@ function characterFromCard(card) {
     /<!-- RPG_CHARACTER_JSON_START -->([\s\S]*?)<!-- RPG_CHARACTER_JSON_END -->/,
   );
   if (!match) return null;
-  return JSON.parse(match[1].trim());
+  try {
+    return JSON.parse(match[1].trim());
+  } catch {
+    return null;
+  }
 }
 
 function characterDescription(character) {
-  const lines = [
-    `# ${character.name || 'Personagem sem nome'}`,
+  const header = [
+    `# ${sanitizeText(character.name || 'Personagem sem nome', 120)}`,
+    `**Jogador:** ${sanitizeText(character.playerName || '', 120)}`,
+    `**Raça:** ${sanitizeText(character.raceId || '', 120)}${character.raceVariant ? ` · ${sanitizeText(character.raceVariant, 80)}` : ''}`,
+    `**Classe:** ${sanitizeText(character.classId || '', 120)}`,
+    `**Nível:** ${Number(character.level || 1)}`,
+    `**Revisão:** ${Number(character.syncRevision || 0)}`,
     '',
-    `**Jogador:** ${character.playerName || ''}`,
-    `**Raca:** ${character.raceId || ''}${character.raceVariant ? ` - ${character.raceVariant}` : ''}`,
-    `**Classe:** ${character.classId || ''}`,
-    `**Nivel:** ${character.level || 1}`,
-    '',
-    character.background ? `**Origem:** ${character.background}` : '',
-    character.lore ? `## Historia\n${character.lore}` : '',
-    '',
-    '---',
-    'Dados completos usados pelo app. Evite editar este bloco manualmente.',
+    'Dados estruturados usados pelos aplicativos:',
     '<!-- RPG_CHARACTER_JSON_START -->',
-    JSON.stringify(character, null, 2),
-    '<!-- RPG_CHARACTER_JSON_END -->',
-  ];
-  return lines.filter(Boolean).join('\n');
+  ].join('\n');
+  const footer = '\n<!-- RPG_CHARACTER_JSON_END -->';
+  const description = `${header}${JSON.stringify(character)}${footer}`;
+  if (description.length > TRELLO_DESCRIPTION_LIMIT) {
+    throw new AppError('A ficha continua maior que o limite do Trello.', 413, {
+      characters: description.length,
+      limit: TRELLO_DESCRIPTION_LIMIT,
+    });
+  }
+  return description;
+}
+
+function enqueueCharacterWrite(characterId, task) {
+  const previous = characterWriteQueues.get(characterId) || Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  characterWriteQueues.set(characterId, next);
+  return next.finally(() => {
+    if (characterWriteQueues.get(characterId) === next) characterWriteQueues.delete(characterId);
+  });
+}
+
+export function mergeCharacterUpdate(current, incoming, changedFields) {
+  if (!current || !Array.isArray(changedFields) || changedFields.length === 0) {
+    return { ...(current || {}), ...incoming };
+  }
+  const result = { ...current };
+  for (const field of changedFields.slice(0, 80)) {
+    if (field === 'id' || field === 'syncRevision' || field === 'createdAt') continue;
+    if (Object.hasOwn(incoming, field)) result[field] = incoming[field];
+  }
+  return result;
+}
+
+export function prepareCharacterForStorage(raw) {
+  const character = JSON.parse(JSON.stringify(raw));
+  delete character.modifiers;
+  character.name = sanitizeText(character.name, 120);
+  character.playerName = sanitizeText(character.playerName, 120);
+  character.background = sanitizeText(character.background, 500);
+  character.lore = sanitizeText(character.lore, 2500);
+  character.notes = compactStrings(character.notes, 20, 500);
+  character.manualProficiencies = compactStrings(character.manualProficiencies, 80, 160);
+  character.manualAbilities = compactStrings(character.manualAbilities, 80, 240);
+  character.rollHistory = compactHistory(character.rollHistory, 12);
+  character.levelHistory = compactHistory(character.levelHistory, 12);
+  character.classXpHistory = compactHistory(character.classXpHistory, 12);
+  character.experienceHistory = compactHistory(character.experienceHistory, 12);
+  character.humanityHistory = compactHistory(character.humanityHistory, 12);
+  character.actionHistory = compactHistory(character.actionHistory, 20);
+  character.inventory = compactInventory(character.inventory);
+  character.equipment = compactInventory(character.equipment);
+
+  let description = characterDescriptionUnchecked(character);
+  if (description.length > SAFE_DESCRIPTION_LIMIT) {
+    character.rollHistory = compactHistory(character.rollHistory, 5);
+    character.classXpHistory = compactHistory(character.classXpHistory, 5);
+    character.experienceHistory = compactHistory(character.experienceHistory, 5);
+    character.humanityHistory = compactHistory(character.humanityHistory, 5);
+    character.actionHistory = compactHistory(character.actionHistory, 8);
+    character.levelHistory = compactHistory(character.levelHistory, 8);
+    description = characterDescriptionUnchecked(character);
+  }
+  if (description.length > SAFE_DESCRIPTION_LIMIT) {
+    character.lore = sanitizeText(character.lore, 1000);
+    character.notes = compactStrings(character.notes, 8, 240);
+    character.rollHistory = [];
+    character.classXpHistory = [];
+    character.experienceHistory = [];
+    character.humanityHistory = [];
+    character.actionHistory = compactHistory(character.actionHistory, 5);
+    description = characterDescriptionUnchecked(character);
+  }
+  if (description.length > SAFE_DESCRIPTION_LIMIT) {
+    throw new AppError('A ficha possui dados demais para o limite do Trello.', 413, {
+      characters: description.length,
+      limit: SAFE_DESCRIPTION_LIMIT,
+    });
+  }
+  return character;
+}
+
+function characterDescriptionUnchecked(character) {
+  const fixedOverhead = 400;
+  return 'x'.repeat(fixedOverhead) + JSON.stringify(character);
+}
+
+function compactHistory(values, limit) {
+  return Array.isArray(values) ? values.slice(0, limit) : [];
+}
+
+function compactStrings(values, limit, maxLength) {
+  return Array.isArray(values)
+    ? values.slice(0, limit).map((value) => sanitizeText(value, maxLength)).filter(Boolean)
+    : [];
+}
+
+function compactInventory(values) {
+  if (!Array.isArray(values)) return [];
+  return values.slice(0, 200).map((item) => {
+    const compact = { ...item };
+    for (const key of ['name', 'type', 'bonus', 'description', 'notes', 'requirements']) {
+      if (compact[key] !== undefined) compact[key] = sanitizeText(compact[key], key === 'description' ? 800 : 240);
+    }
+    if (compact.catalogId) {
+      delete compact.description;
+      delete compact.imageUrl;
+    }
+    return compact;
+  });
+}
+
+function sanitizeText(value, maxLength = 4000) {
+  return String(value || '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .slice(0, maxLength)
+    .trim();
 }
