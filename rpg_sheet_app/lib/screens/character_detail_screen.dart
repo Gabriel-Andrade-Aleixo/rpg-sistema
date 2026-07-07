@@ -76,7 +76,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
     final recalculated = _recalculation.recalculate(compact, widget.catalog);
     setState(() => _character = recalculated);
-    await widget.repository.saveCharacter(recalculated);
+    await widget.repository.queueCharacterSave(recalculated);
   }
 
   @override
@@ -997,24 +997,21 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) {
           final normalizedQuery = normalizeCatalogText(query);
-          final available = widget.catalog.spells
-              .where(
-                (entry) {
-                  final metadata = _ruleMetadata(entry);
-                  final className = metadata['className']?.toString() ?? '';
-                  final actionId = metadata['actionId']?.toString() ?? '';
-                  final allowedClass = className.isEmpty ||
-                      normalizeCatalogText(className) ==
-                          normalizeCatalogText(_class?.name ?? '');
-                  return allowedClass &&
-                      (actionId.isEmpty || !ownedActions.contains(actionId)) &&
-                      !owned.contains(entry.id) &&
-                      normalizeCatalogText(
-                        '${entry.name} ${entry.description} ${entry.labels.map((label) => label.name).join(' ')}',
-                      ).contains(normalizedQuery);
-                },
-              )
-              .toList();
+          final available = widget.catalog.spells.where((entry) {
+            final metadata = _ruleMetadata(entry);
+            final className = metadata['className']?.toString() ?? '';
+            final actionId = metadata['actionId']?.toString() ?? '';
+            final allowedClass =
+                className.isEmpty ||
+                normalizeCatalogText(className) ==
+                    normalizeCatalogText(_class?.name ?? '');
+            return allowedClass &&
+                (actionId.isEmpty || !ownedActions.contains(actionId)) &&
+                !owned.contains(entry.id) &&
+                normalizeCatalogText(
+                  '${entry.name} ${entry.description} ${entry.labels.map((label) => label.name).join(' ')}',
+                ).contains(normalizedQuery);
+          }).toList();
           return SafeArea(
             child: SizedBox(
               height: MediaQuery.sizeOf(context).height * .78,

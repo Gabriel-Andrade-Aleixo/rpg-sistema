@@ -80,8 +80,17 @@ class BackendApiService {
     return Character.fromJson(Map<String, dynamic>.from(character));
   }
 
-  Future<Character> saveCharacter(Character character) async {
-    final data = await _post('/characters', {'character': character.toJson()});
+  Future<Character> saveCharacter(
+    Character character, {
+    int? baseRevision,
+    List<String>? changedFields,
+  }) async {
+    final payload = <String, dynamic>{'character': character.toJson()};
+    if (baseRevision != null) payload['baseRevision'] = baseRevision;
+    if (changedFields != null && changedFields.isNotEmpty) {
+      payload['changedFields'] = changedFields;
+    }
+    final data = await _post('/characters', payload);
     final persisted = data['character'];
     if (persisted is! Map) {
       throw StateError('O backend não confirmou a ficha salva.');
@@ -94,7 +103,9 @@ class BackendApiService {
   }
 
   Future<Map<String, dynamic>> _get(String path) async {
-    final response = await _client.get(_uri(path));
+    final response = await _client
+        .get(_uri(path))
+        .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
 
@@ -102,16 +113,20 @@ class BackendApiService {
     String path,
     Map<String, dynamic> payload,
   ) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
-    );
+    final response = await _client
+        .post(
+          _uri(path),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
 
   Future<Map<String, dynamic>> _delete(String path) async {
-    final response = await _client.delete(_uri(path));
+    final response = await _client
+        .delete(_uri(path))
+        .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
 
@@ -119,11 +134,13 @@ class BackendApiService {
     String path,
     Map<String, dynamic> payload,
   ) async {
-    final response = await _client.put(
-      _uri(path),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
-    );
+    final response = await _client
+        .put(
+          _uri(path),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
 
@@ -135,7 +152,14 @@ class BackendApiService {
   }
 
   Map<String, dynamic> _decode(http.Response response) {
-    final data = jsonDecode(response.body);
+    dynamic data;
+    try {
+      data = jsonDecode(response.body);
+    } on FormatException {
+      throw StateError(
+        'O backend respondeu em um formato inválido (${response.statusCode}).',
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
         'Backend respondeu ${response.statusCode}: ${response.body}',

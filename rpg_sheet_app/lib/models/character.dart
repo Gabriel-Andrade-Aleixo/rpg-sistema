@@ -173,6 +173,7 @@ class Character {
     List<HumanityRecord>? humanityHistory,
     List<CharacterSpell>? spells,
     List<ActionUseRecord>? actionHistory,
+    this.syncRevision = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : attributes = attributes ?? _defaultAttributes(),
@@ -238,6 +239,7 @@ class Character {
   final List<HumanityRecord> humanityHistory;
   final List<CharacterSpell> spells;
   final List<ActionUseRecord> actionHistory;
+  final int syncRevision;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -303,6 +305,7 @@ class Character {
     'humanityHistory': humanityHistory.map((item) => item.toJson()).toList(),
     'spells': spells.map((item) => item.toJson()).toList(),
     'actionHistory': actionHistory.map((item) => item.toJson()).toList(),
+    'syncRevision': syncRevision,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -432,6 +435,7 @@ class Character {
             (item) => ActionUseRecord.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      syncRevision: (json['syncRevision'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );
@@ -478,6 +482,7 @@ class Character {
     List<HumanityRecord>? humanityHistory,
     List<CharacterSpell>? spells,
     List<ActionUseRecord>? actionHistory,
+    int? syncRevision,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Character(
@@ -523,6 +528,7 @@ class Character {
     humanityHistory: humanityHistory ?? List.of(this.humanityHistory),
     spells: spells ?? List.of(this.spells),
     actionHistory: actionHistory ?? List.of(this.actionHistory),
+    syncRevision: syncRevision ?? this.syncRevision,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? DateTime.now(),
   );
