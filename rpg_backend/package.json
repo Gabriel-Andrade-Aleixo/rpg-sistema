@@ -10,6 +10,7 @@
     "test": "node --test",
     "sync:system": "node scripts/sync-system-catalog.js",
     "sync:rules": "node scripts/sync-rule-metadata.js",
+    "sync:document": "pwsh -NoProfile -File scripts/sync-document-rules.ps1",
     "sync:armors": "node scripts/sync-armors.js",
     "sync:spells": "node scripts/sync-divine-spells.js",
     "audit:rules": "node scripts/audit-system-rules.js"

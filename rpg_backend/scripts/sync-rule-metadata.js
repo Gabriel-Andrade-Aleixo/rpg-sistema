@@ -19,7 +19,8 @@ const classes = {
     allowedCombatXpAttributes: ['strength', 'constitution', 'dexterity'],
   },
   Mago: {
-    id: 'mage', defense: f(0, { dexterity: .7, constitution: .3 }), hp: null,
+    id: 'mage', defense: f(0, { dexterity: .7, constitution: .3 }),
+    hp: hp(f(10, { constitution: 3 }), f(7, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 6, ...f(3, { constitution: 1 }) }),
     mana: f(10, { intelligence: 3 }),
     attributeProgression: [progression(1, 10, { intelligence: 1 })],
     allowedCombatXpAttributes: ['intelligence', 'charisma'],
@@ -79,6 +80,12 @@ const classes = {
     mana: f(10, { charisma: 1, intelligence: .5 }),
     attributeProgression: [progression(1, 3, { charisma: 1 }), progression(4, 10, { charisma: 1, constitution: 1 })],
     allowedCombatXpAttributes: ['charisma', 'constitution'],
+  },
+  Lutador: {
+    id: 'fighter', defense: f(0, { constitution: .4, strength: .3, dexterity: .3 }),
+    hp: hp(f(18, { constitution: 3 }), f(7, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 6, ...f(5, { constitution: 1 }) }),
+    attributeProgression: [progression(1, 3, { strength: 1 }), progression(4, 10, { strength: 1, dexterity: 1 })],
+    allowedCombatXpAttributes: ['strength', 'dexterity', 'constitution'],
   },
 };
 

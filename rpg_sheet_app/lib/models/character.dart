@@ -171,6 +171,7 @@ class Character {
     this.combatXp = 0,
     List<ExperienceRecord>? experienceHistory,
     List<HumanityRecord>? humanityHistory,
+    List<CorruptionRecord>? corruptionHistory,
     List<CharacterSpell>? spells,
     List<ActionUseRecord>? actionHistory,
     this.syncRevision = 0,
@@ -194,6 +195,7 @@ class Character {
        areaExperience = areaExperience ?? {},
        experienceHistory = experienceHistory ?? [],
        humanityHistory = humanityHistory ?? [],
+       corruptionHistory = corruptionHistory ?? [],
        spells = spells ?? [],
        actionHistory = actionHistory ?? [],
        createdAt = createdAt ?? DateTime.now(),
@@ -237,6 +239,7 @@ class Character {
   final int combatXp;
   final List<ExperienceRecord> experienceHistory;
   final List<HumanityRecord> humanityHistory;
+  final List<CorruptionRecord> corruptionHistory;
   final List<CharacterSpell> spells;
   final List<ActionUseRecord> actionHistory;
   final int syncRevision;
@@ -303,6 +306,9 @@ class Character {
         .map((item) => item.toJson())
         .toList(),
     'humanityHistory': humanityHistory.map((item) => item.toJson()).toList(),
+    'corruptionHistory': corruptionHistory
+        .map((item) => item.toJson())
+        .toList(),
     'spells': spells.map((item) => item.toJson()).toList(),
     'actionHistory': actionHistory.map((item) => item.toJson()).toList(),
     'syncRevision': syncRevision,
@@ -423,6 +429,13 @@ class Character {
             (item) => HumanityRecord.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      corruptionHistory: ((json['corruptionHistory'] as List?) ?? [])
+          .whereType<Map>()
+          .map(
+            (item) =>
+                CorruptionRecord.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(),
       spells: ((json['spells'] as List?) ?? [])
           .whereType<Map>()
           .map(
@@ -480,6 +493,7 @@ class Character {
     int? combatXp,
     List<ExperienceRecord>? experienceHistory,
     List<HumanityRecord>? humanityHistory,
+    List<CorruptionRecord>? corruptionHistory,
     List<CharacterSpell>? spells,
     List<ActionUseRecord>? actionHistory,
     int? syncRevision,
@@ -526,6 +540,7 @@ class Character {
     combatXp: combatXp ?? this.combatXp,
     experienceHistory: experienceHistory ?? List.of(this.experienceHistory),
     humanityHistory: humanityHistory ?? List.of(this.humanityHistory),
+    corruptionHistory: corruptionHistory ?? List.of(this.corruptionHistory),
     spells: spells ?? List.of(this.spells),
     actionHistory: actionHistory ?? List.of(this.actionHistory),
     syncRevision: syncRevision ?? this.syncRevision,

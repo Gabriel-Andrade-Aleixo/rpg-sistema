@@ -67,13 +67,28 @@ void main() {
       'name': 'Mago',
       'id': 'mage',
       'defense': formula(0, {'dexterity': .7, 'constitution': .3}),
-      'hp': null,
+      'hp': hp(
+        formula(10, {'constitution': 3}),
+        formula(7, {'constitution': 1}),
+        {
+          'die': 8,
+          ...formula(0, {'constitution': 1}),
+        },
+        {
+          'die': 6,
+          ...formula(3, {'constitution': 1}),
+        },
+      ),
       'mana': formula(10, {'intelligence': 3}),
       'progression': [
         progression(1, 10, {'intelligence': 1}),
       ],
       'expected': {
         'defense': 3,
+        'initialHp': 22,
+        'fixedHp': 11,
+        'rollBonus': 4,
+        'hybridBonus': 7,
         'mana': 25,
         'level10': {'intelligence': 10},
       },
@@ -305,6 +320,39 @@ void main() {
         'level10': {'charisma': 10, 'constitution': 7},
       },
     },
+    {
+      'name': 'Lutador',
+      'id': 'fighter',
+      'defense': formula(0, {
+        'constitution': .4,
+        'strength': .3,
+        'dexterity': .3,
+      }),
+      'hp': hp(
+        formula(18, {'constitution': 3}),
+        formula(7, {'constitution': 1}),
+        {
+          'die': 10,
+          ...formula(0, {'constitution': 1}),
+        },
+        {
+          'die': 6,
+          ...formula(5, {'constitution': 1}),
+        },
+      ),
+      'progression': [
+        progression(1, 3, {'strength': 1}),
+        progression(4, 10, {'strength': 1, 'dexterity': 1}),
+      ],
+      'expected': {
+        'defense': 3,
+        'initialHp': 30,
+        'fixedHp': 11,
+        'rollBonus': 4,
+        'hybridBonus': 9,
+        'level10': {'strength': 10, 'dexterity': 7},
+      },
+    },
   ];
 
   CatalogEntry entryFor(Map<String, dynamic> rule) => CatalogEntry(
@@ -331,7 +379,7 @@ void main() {
     },
   );
 
-  test('as nove classes seguem as fórmulas oficiais do documento', () {
+  test('as dez classes seguem as fórmulas oficiais do documento', () {
     for (final rule in rules) {
       final parsed = parser.parseClass(entryFor(rule));
       final expected = rule['expected'] as Map<String, dynamic>;

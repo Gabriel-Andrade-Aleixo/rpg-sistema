@@ -6,6 +6,7 @@ const legacyNames = {
   bugbear: 'bugbear', firbolg: 'firbolg', barbarian: 'barbaro', mage: 'mago',
   spectral_archer: 'arqueiro espectral', tactical_maestro: 'maestro tatico', cleric: 'clerigo',
   paladin: 'paladino', rogue: 'ladino', ranger: 'ranger', bard: 'bardo',
+  fighter: 'lutador',
 };
 
 const attributeAliases = {
@@ -74,6 +75,7 @@ export function migrateCharacter(raw, catalog) {
     combatXp: Number(raw.combatXp || 0),
     experienceHistory: raw.experienceHistory || [],
     humanityHistory: raw.humanityHistory || [],
+    corruptionHistory: raw.corruptionHistory || [],
     modifiers: raw.modifiers || [],
     rollHistory: raw.rollHistory || [],
     levelHistory: raw.levelHistory || [],

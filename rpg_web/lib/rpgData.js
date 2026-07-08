@@ -48,6 +48,7 @@ export function emptyCharacter() {
     combatXp: 0,
     experienceHistory: [],
     humanityHistory: [],
+    corruptionHistory: [],
     spells: [],
     actionHistory: [],
     modifiers: [],

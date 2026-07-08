@@ -29,7 +29,7 @@ const expectedClasses = {
   Mago: {
     id: 'mage',
     defense: f(0, { dexterity: .7, constitution: .3 }),
-    hp: null,
+    hp: hp(f(10, { constitution: 3 }), f(7, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 6, ...f(3, { constitution: 1 }) }),
     mana: f(10, { intelligence: 3 }),
     attributeProgression: [p(1, 10, { intelligence: 1 })],
     allowedCombatXpAttributes: ['intelligence', 'charisma'],
@@ -97,6 +97,14 @@ const expectedClasses = {
     allowedCombatXpAttributes: ['charisma', 'constitution'],
     text: '10 + Carisma + (Inteligência ÷ 2)',
   },
+  Lutador: {
+    id: 'fighter',
+    defense: f(0, { constitution: .4, strength: .3, dexterity: .3 }),
+    hp: hp(f(18, { constitution: 3 }), f(7, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 6, ...f(5, { constitution: 1 }) }),
+    attributeProgression: [p(1, 3, { strength: 1 }), p(4, 10, { strength: 1, dexterity: 1 })],
+    allowedCombatXpAttributes: ['strength', 'dexterity', 'constitution'],
+    text: 'Nível 9 — Sequência Avançada',
+  },
 };
 
 const expectedRaces = {
@@ -163,6 +171,10 @@ assert.ok(normalize(humanityCard.desc).includes('humanidade 10'), 'Fórmula de R
 const experienceCard = findCard(systemCards, 'Experiencia e Nivel');
 assert.ok(experienceCard, 'Cartão do sistema de XP ausente');
 assert.ok(normalize(experienceCard.desc).includes('participacao na sessao 1'), 'XP automático de participação ausente');
+const corruptionCard = findCard(systemCards, 'Corrupção e Magia Demoníaca');
+assert.ok(corruptionCard, 'Cartão do sistema de Corrupção ausente');
+assert.ok(normalize(corruptionCard.desc).includes('100 de corrupcao'), 'Faixa de 100 de Corrupção ausente');
+assert.ok(normalize(corruptionCard.desc).includes('manifestacao demoniaca'), 'Manifestação Demoníaca ausente');
 
 const unsupported = classCards
   .filter((card) => !metadataOf(card))
@@ -173,8 +185,7 @@ const unsupportedRaces = raceCards
   .map((card) => card.name)
   .sort();
 
-console.log(`Auditoria concluída: ${Object.keys(expectedClasses).length} classes, ${Object.keys(expectedRaces).length} raças, ${Object.keys(expectedSkills).length} perícias, Humanidade e XP corretos.`);
-console.log('Aviso conhecido: Mago não possui regras de HP no documento atual.');
+console.log(`Auditoria concluída: ${Object.keys(expectedClasses).length} classes, ${Object.keys(expectedRaces).length} raças, ${Object.keys(expectedSkills).length} perícias, Humanidade, Corrupção e XP corretos.`);
 console.log(`Classes de catálogo sem regras jogáveis: ${unsupported.join(', ') || 'nenhuma'}.`);
 console.log(`Raças de catálogo sem regras jogáveis: ${unsupportedRaces.join(', ') || 'nenhuma'}.`);
 

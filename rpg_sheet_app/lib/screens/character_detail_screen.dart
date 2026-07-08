@@ -11,6 +11,7 @@ import '../domain/services/character_recalculation_service.dart';
 import '../domain/services/death_save_service.dart';
 import '../domain/services/experience_service.dart';
 import '../domain/services/humanity_service.dart';
+import '../domain/services/corruption_service.dart';
 import '../models/catalog_models.dart';
 import '../models/character.dart';
 import '../models/character_records.dart';
@@ -50,6 +51,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
   static const _combat = CombatCalculator();
   static const _experience = ExperienceService();
   static const _humanity = HumanityService();
+  static const _corruption = CorruptionService();
   static const _deathSaves = DeathSaveService();
   static const _classActions = ClassActionService();
   static const _parser = TrelloParserService();
@@ -73,6 +75,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       experienceHistory: next.experienceHistory.take(20).toList(),
       classXpHistory: next.classXpHistory.take(20).toList(),
       humanityHistory: next.humanityHistory.take(20).toList(),
+      corruptionHistory: next.corruptionHistory.take(20).toList(),
     );
     final recalculated = _recalculation.recalculate(compact, widget.catalog);
     setState(() => _character = recalculated);
@@ -141,6 +144,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       0 => <Widget>[
         _resources(),
         SectionCard(title: 'Humanidade e Divindade', child: _humanitySection()),
+        SectionCard(title: 'Corrupção', child: _corruptionSection()),
         SectionCard(
           title: 'Defesa e Classe de Armadura',
           child: _defenseSection(),
@@ -743,7 +747,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             children: [
               Text(spell.name, style: Theme.of(context).textTheme.titleSmall),
               Text(
-                '${spell.type} · ${spell.manaCost} PM${spell.focusCost > 0 ? ' · ${spell.focusCost} Foco' : ''}${spell.humanityCost > 0 ? ' · ${spell.humanityCost} HM' : ''}',
+                '${spell.type} · ${_spellManaCost(spell)} PM${spell.focusCost > 0 ? ' · ${spell.focusCost} Foco' : ''}${spell.humanityCost > 0 ? ' · ${spell.humanityCost} HM' : ''}',
               ),
               Text(
                 spell.mastered
@@ -751,7 +755,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                     : '${spell.successfulUses}/3 usos bem-sucedidos',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              if (spell.damage.isNotEmpty) Text('Dano/Efeito: ${spell.damage}'),
+              if (spell.damage.isNotEmpty)
+                Text(
+                  'Dano/Efeito: ${spell.damage}${_corruption.isDemonicSpell(spell) && _corruption.damageBonus(_character) > 0 ? ' · +${_corruption.damageBonus(_character)} pela Corrupção' : ''}',
+                ),
               if (spell.range.isNotEmpty) Text('Alcance: ${spell.range}'),
               if (spell.description.isNotEmpty) Text(spell.description),
               const SizedBox(height: 8),
@@ -860,7 +867,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                       ],
                     ),
                     Text(
-                      '${spell.type} · ${spell.manaCost} PM · ${spell.focusCost} Foco · ${spell.humanityCost} Humanidade',
+                      '${spell.type} · ${_spellManaCost(spell)} PM · ${spell.focusCost} Foco · ${spell.humanityCost} Humanidade',
                     ),
                     Text(
                       spell.mastered
@@ -1555,6 +1562,158 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     ],
   );
 
+  Widget _corruptionSection() {
+    final corruption = _corruption.value(_character);
+    final status = _corruption.status(_character);
+    final zoneActive = _character.resources['demonicZoneActive'] == 1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _humanityBar('Corrupção', corruption, 100),
+        const SizedBox(height: 14),
+        Text(status.name, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(status.description),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(
+              label: Text(
+                'Dano demoníaco +${_corruption.damageBonus(_character)}',
+              ),
+            ),
+            Chip(
+              label: Text(
+                'Custo demoníaco +${_corruption.damageBonus(_character)} PM',
+              ),
+            ),
+            Chip(
+              label: Text(
+                'Dano na zona +${_corruption.incomingZoneDamageBonus(_character)}',
+              ),
+            ),
+            if (status.demonicOnly)
+              const Chip(label: Text('Ataques apenas demoníacos')),
+            if (!status.playable)
+              const Chip(label: Text('Manifestação completa')),
+          ],
+        ),
+        if (zoneActive) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'Zona ativa: vantagem em poderes demoníacos e uma rolagem adicional com vantagem a cada 5 turnos.',
+          ),
+        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: corruption >= 100
+                  ? null
+                  : () => _changeCorruption(increase: true),
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('Adicionar Corrupção'),
+            ),
+            OutlinedButton.icon(
+              onPressed: corruption <= 0
+                  ? null
+                  : () => _changeCorruption(increase: false),
+              icon: const Icon(Icons.remove_circle_outline),
+              label: const Text('Reduzir'),
+            ),
+            if (status.canCreateZone)
+              OutlinedButton.icon(
+                onPressed: () => _persist(_corruption.toggleZone(_character)),
+                icon: Icon(
+                  zoneActive ? Icons.stop_circle_outlined : Icons.blur_circular,
+                ),
+                label: Text(zoneActive ? 'Encerrar zona' : 'Criar zona'),
+              ),
+            if (status.lastOrder)
+              OutlinedButton.icon(
+                onPressed: () => _persist(_corruption.advanceTurn(_character)),
+                icon: const Icon(Icons.timer_outlined),
+                label: const Text('Avançar turno'),
+              ),
+          ],
+        ),
+        if (_character.corruptionHistory.isNotEmpty) ...[
+          const Divider(height: 28),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Histórico de Corrupção'),
+            children: [
+              for (final record in _character.corruptionHistory.take(20))
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(record.reason),
+                  subtitle: Text(
+                    'Corrupção ${record.before} → ${record.after}',
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _changeCorruption({required bool increase}) async {
+    final amount = TextEditingController(text: '1');
+    final reason = TextEditingController(
+      text: increase
+          ? 'Influência do pacto demoníaco'
+          : 'Purificação definida pelo mestre',
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(increase ? 'Adicionar Corrupção' : 'Reduzir Corrupção'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Quantidade'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(labelText: 'Motivo'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    final parsedAmount = int.tryParse(amount.text) ?? 0;
+    final parsedReason = reason.text;
+    amount.dispose();
+    reason.dispose();
+    if (confirmed != true || parsedAmount <= 0) return;
+    await _persist(
+      _corruption.change(
+        _character,
+        increase ? parsedAmount : -parsedAmount,
+        parsedReason,
+      ),
+    );
+  }
+
   Future<void> _changeHumanity({required bool spend}) async {
     final amount = TextEditingController(text: '1');
     final reason = TextEditingController(
@@ -1710,37 +1869,54 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  Widget _combatSection() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          FilledButton.icon(
-            onPressed: () => _rollSimple('attack', 'Ataque'),
-            icon: const Icon(Icons.gps_fixed),
-            label: const Text('Ataque'),
+  int _spellManaCost(CharacterSpell spell) => _corruption.isDemonicSpell(spell)
+      ? _corruption.spellCost(_character, spell.manaCost)
+      : spell.manaCost;
+
+  Widget _combatSection() {
+    final demonicOnly = _corruption.status(_character).demonicOnly;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (demonicOnly) ...[
+          const Text(
+            'Com 50 ou mais de Corrupção, ataques só podem utilizar Magia Demoníaca.',
           ),
-          OutlinedButton.icon(
-            onPressed: () => _rollSimple('damage', 'Dano', sides: 6),
-            icon: const Icon(Icons.flash_on_outlined),
-            label: const Text('Dano'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => _rollSimple('resistance', 'Resistência'),
-            icon: const Icon(Icons.shield_outlined),
-            label: const Text('Resistência'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => _rollSimple('general', 'Teste geral'),
-            icon: const Icon(Icons.casino_outlined),
-            label: const Text('Teste geral'),
-          ),
+          const SizedBox(height: 10),
         ],
-      ),
-    ],
-  );
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: demonicOnly
+                  ? null
+                  : () => _rollSimple('attack', 'Ataque'),
+              icon: const Icon(Icons.gps_fixed),
+              label: const Text('Ataque'),
+            ),
+            OutlinedButton.icon(
+              onPressed: demonicOnly
+                  ? null
+                  : () => _rollSimple('damage', 'Dano', sides: 6),
+              icon: const Icon(Icons.flash_on_outlined),
+              label: const Text('Dano'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _rollSimple('resistance', 'Resistência'),
+              icon: const Icon(Icons.shield_outlined),
+              label: const Text('Resistência'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _rollSimple('general', 'Teste geral'),
+              icon: const Icon(Icons.casino_outlined),
+              label: const Text('Teste geral'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
   Widget _defenseSection() {
     final parsedClass = _class == null ? null : _parser.parseClass(_class!);

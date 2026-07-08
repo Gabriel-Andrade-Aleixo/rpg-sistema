@@ -266,13 +266,13 @@ const classes = <CharacterClassDefinition>[
     defense: defaultDefense,
     hp: HpFormulaDefinition(
       initial: FormulaDefinition(
-        label: 'HP inicial nao especificado',
-        base: 0,
-        components: [],
+        label: 'HP inicial',
+        base: 10,
+        components: [WeightedAttribute(AttributeId.constitution, 3)],
       ),
-      fixedPerLevel: 'Nao especificado no documento',
-      rollPerLevel: 'Nao especificado no documento',
-      hybridPerLevel: 'Nao especificado no documento',
+      fixedPerLevel: '7 + Constituicao',
+      rollPerLevel: '1d8 + Constituicao',
+      hybridPerLevel: '3 + 1d6 + Constituicao',
     ),
     mana: FormulaDefinition(
       label: 'Mana maxima',
@@ -858,6 +858,80 @@ const classes = <CharacterClassDefinition>[
         name: 'Maestro do Compasso',
         description:
             'Inicia combate com 1 Compasso; ao atingir 3, recebe acao adicional de movimento ou suporte.',
+      ),
+    ],
+  ),
+  CharacterClassDefinition(
+    id: 'fighter',
+    name: 'Lutador',
+    description: 'Especialista em combate físico, armas e técnicas desarmadas.',
+    defense: FormulaDefinition(
+      label: 'Defesa',
+      components: [
+        WeightedAttribute(AttributeId.constitution, .40),
+        WeightedAttribute(AttributeId.strength, .30),
+        WeightedAttribute(AttributeId.dexterity, .30),
+      ],
+    ),
+    hp: HpFormulaDefinition(
+      initial: FormulaDefinition(
+        label: 'HP inicial',
+        base: 18,
+        components: [WeightedAttribute(AttributeId.constitution, 3)],
+      ),
+      fixedPerLevel: '7 + Constituicao',
+      rollPerLevel: '1d10 + Constituicao',
+      hybridPerLevel: '5 + 1d6 + Constituicao',
+    ),
+    attributeProgression: [
+      'Niveis 1-3: +1 Forca por nivel.',
+      'Niveis 4-10: +1 Forca e +1 Destreza.',
+    ],
+    allowedCombatXpAttributes: [
+      AttributeId.strength,
+      AttributeId.dexterity,
+      AttributeId.constitution,
+    ],
+    abilities: [
+      AbilityDefinition(
+        level: 1,
+        name: 'Sequencia de Ataques',
+        description:
+            'Resultado natural 17 ou mais permite um ataque adicional que não gera nova sequência.',
+      ),
+      AbilityDefinition(
+        level: 2,
+        name: 'Treinamento I',
+        description:
+            'Após 8 horas de treino, especializa uma técnica desarmada ou categoria de arma.',
+      ),
+      AbilityDefinition(
+        level: 3,
+        name: 'Arremesso',
+        description:
+            '1 vez por turno, arremessa inimigo até Força metros, máximo 9; colisão causa 1d6.',
+      ),
+      AbilityDefinition(
+        level: 5,
+        name: 'Ataque Desestabilizante',
+        description:
+            'Ao acertar corpo a corpo, pode derrubar ou desarmar o alvo.',
+      ),
+      AbilityDefinition(
+        level: 6,
+        name: 'Treinamento II',
+        description: 'Aprimora o treinamento anterior ou inicia um novo.',
+      ),
+      AbilityDefinition(
+        level: 7,
+        name: 'Experiencia de Combate',
+        description: 'Recebe -1 de dano físico.',
+      ),
+      AbilityDefinition(
+        level: 9,
+        name: 'Sequencia Avancada',
+        description:
+            'O primeiro ataque adicional com natural 17 ou mais gera um segundo ataque adicional.',
       ),
     ],
   ),

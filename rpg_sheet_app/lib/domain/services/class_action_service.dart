@@ -4,6 +4,7 @@ import '../../models/character.dart';
 import '../../models/character_records.dart';
 import '../../utils/id_generator.dart';
 import 'humanity_service.dart';
+import 'corruption_service.dart';
 
 class SpectralInfusion {
   const SpectralInfusion(this.id, this.name, this.manaCost, this.effect);
@@ -188,7 +189,13 @@ class ClassActionService {
     CharacterSpell spell, {
     required bool successful,
   }) {
-    if (character.currentMana < spell.manaCost) {
+    const corruption = CorruptionService();
+    final demonic = corruption.isDemonicSpell(spell);
+    final manaCost = demonic
+        ? corruption.spellCost(character, spell.manaCost)
+        : spell.manaCost;
+    final damageBonus = demonic ? corruption.damageBonus(character) : 0;
+    if (character.currentMana < manaCost) {
       return ClassActionResult(character, error: 'Mana insuficiente.');
     }
     final focus = character.resources['focoCurrent'] ?? 0;
@@ -199,7 +206,7 @@ class ClassActionService {
       return ClassActionResult(character, error: 'Humanidade insuficiente.');
     }
     var next = character.copyWith(
-      currentMana: character.currentMana - spell.manaCost,
+      currentMana: character.currentMana - manaCost,
       resources: {
         ...character.resources,
         'focoCurrent': focus - spell.focusCost,
@@ -226,10 +233,11 @@ class ClassActionService {
         ActionUseRecord(
           id: newId('action'),
           name: spell.name,
-          manaSpent: spell.manaCost,
+          manaSpent: manaCost,
           focusSpent: spell.focusCost,
           humanitySpent: spell.humanityCost,
-          result: successful ? 'Sucesso' : 'Falha',
+          result:
+              '${successful ? 'Sucesso' : 'Falha'}${damageBonus > 0 ? ' · dano demoníaco +$damageBonus' : ''}',
           createdAt: DateTime.now(),
         ),
         ...next.actionHistory,

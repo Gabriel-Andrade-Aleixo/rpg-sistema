@@ -7,6 +7,7 @@ export function compactCharacter(character) {
   compact.experienceHistory = (compact.experienceHistory || []).slice(0, 20);
   compact.classXpHistory = (compact.classXpHistory || []).slice(0, 20);
   compact.humanityHistory = (compact.humanityHistory || []).slice(0, 20);
+  compact.corruptionHistory = (compact.corruptionHistory || []).slice(0, 20);
   compact.actionHistory = (compact.actionHistory || []).slice(0, 30);
   return compact;
 }

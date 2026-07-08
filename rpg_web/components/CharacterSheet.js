@@ -35,6 +35,7 @@ import {
 import { calculateClassSessionXp, classXpCriteria } from '../lib/experience';
 import { changeHitPoints, recordDeathSave, resetDeathSaves } from '../lib/deathSaves';
 import { infusionDamage, infusionManaCost, spectralInfusions, spectralSpellPresets, useInfusion, useMagicArrow, useSpell } from '../lib/classActions';
+import { advanceDemonicTurn, changeCorruption, corruptionStatus, corruptionValue, demonicDamageBonus, demonicIncomingDamageBonus, demonicSpellCost, isDemonicSpell, toggleDemonicZone } from '../lib/corruption';
 
 export default function CharacterSheet({ character, catalog, onEdit, onUpdate, requestRoll }) {
   const [levelUp, setLevelUp] = useState(false);
@@ -44,6 +45,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
   const race = findEntry(catalog, character.raceId);
   const classEntry = findEntry(catalog, character.classId);
   const parsedClass = classEntry ? parseClass(classEntry) : null;
+  const demonicOnly = corruptionStatus(character).demonicOnly;
 
   function persist(changes) {
     onUpdate(recalculateCharacter({ ...character, ...changes }, catalog));
@@ -121,6 +123,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       </Panel>
 
       <HumanityPanel character={character} classEntry={classEntry} onChange={persist} requestRoll={requestRoll} recordRoll={recordRoll} />
+      <CorruptionPanel character={character} onChange={persistCharacter} />
 
       <Panel title="Pontos" subtitle="Progressão da classe">
         <div className="metricGrid"><Metric label="Nível" value={character.level} /><Metric label="XP de classe" value={`${character.classXp || 0}/${classXpRequired(character.level)}`} /><Metric label="Habilidade" value={character.skillPoints || 0} /><Metric label="Classe" value={character.classPoints || 0} /></div>
@@ -148,7 +151,8 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       </Panel>
 
       <Panel title="Combate e rolagens" subtitle="Ações rápidas">
-        <div className="combatActions"><button className="primaryButton" onClick={() => simpleRoll('attack', 'Ataque')}>Ataque</button><button onClick={() => simpleRoll('damage', 'Dano', 6)}>Dano</button><button onClick={() => simpleRoll('resistance', 'Resistência')}>Resistência</button><button onClick={() => simpleRoll('general', 'Teste geral')}>Teste geral</button></div>
+        {demonicOnly && <p className="validationError">Com 50 ou mais de Corrupção, ataques só podem utilizar Magia Demoníaca.</p>}
+        <div className="combatActions"><button className="primaryButton" disabled={demonicOnly} onClick={() => simpleRoll('attack', 'Ataque')}>Ataque</button><button disabled={demonicOnly} onClick={() => simpleRoll('damage', 'Dano', 6)}>Dano</button><button onClick={() => simpleRoll('resistance', 'Resistência')}>Resistência</button><button onClick={() => simpleRoll('general', 'Teste geral')}>Teste geral</button></div>
       </Panel>
       <Panel title="Rolagens recentes" subtitle="Últimos 20 resultados" wide>
         <div className="panelTools"><button className="ghostButton compactButton" disabled={!character.rollHistory?.length} onClick={() => persist({ rollHistory: [] })}>Limpar histórico</button></div>
@@ -329,12 +333,12 @@ function SpellbookPanel({ character, catalog, classEntry, onChange }) {
 
   return <>
     <Panel title="Grimório do personagem" subtitle="Magias organizadas por tópico" wide>
-      <div className="spellResources"><Metric label="Mana" value={`${character.currentMana}/${character.maxMana}`} /><Metric label="Foco" value={character.resources?.focoCurrent ?? '—'} /><Metric label="Humanidade" value={humanityValue(character)} /><Metric label="Magias" value={(character.spells || []).length} /></div>
+      <div className="spellResources"><Metric label="Mana" value={`${character.currentMana}/${character.maxMana}`} /><Metric label="Foco" value={character.resources?.focoCurrent ?? '—'} /><Metric label="Humanidade" value={humanityValue(character)} /><Metric label="Corrupção" value={corruptionValue(character)} /><Metric label="Magias" value={(character.spells || []).length} /></div>
       {error && <p className="validationError">{error}</p>}
       {normalize(classEntry?.name || '') === 'arqueiro espectral' && <div className="spectralSpellNotice"><div><strong>Flecha Mágica</strong><span>Dano natural: 2d4</span></div><p>Precisão, Impacto, Perfurante, Cinética e Espectral são infusões que aprimoram a mesma Flecha Mágica.</p><div className="classSpellPresets">{spectralSpellPresets.filter((preset) => !knownActionIds.has(preset.actionId)).map((preset) => <button className="ghostButton compactButton" key={preset.actionId} onClick={() => addClassSpell(preset)}><Plus aria-hidden="true" />{preset.name}</button>)}</div><div className="arrowInputs"><label>Resultado dos 2d4<input type="number" min="2" max="8" value={arrowDamage} onChange={(event) => setArrowDamage(event.target.value)} /></label><label>Ataques no turno<input type="number" min="1" value={attacksThisTurn} onChange={(event) => setAttacksThisTurn(event.target.value)} /></label></div></div>}
       <div className="spellbookActions"><details className="catalogSpellPicker"><summary>Adicionar magia existente</summary><label>Buscar no catálogo<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, grau, escola ou efeito" /></label><div>{available.length ? available.slice(0, 60).map((entry) => { const parsed = parseCatalogSpell(entry); return <article key={entry.id}><RpgImage src={entry.imageUrl} alt={entry.name} className="spellCatalogImage" fallback="✦" /><div><strong>{entry.name}</strong><span>{parsed.topic} · {parsed.manaCost} PM · {parsed.humanityCost} HM</span><small>{parsed.damage || parsed.description}</small></div><button className="primaryButton compactButton" onClick={() => addCatalogSpell(entry)}>Adicionar</button></article>; }) : <p className="muted">Nenhuma magia disponível para esta busca.</p>}</div></details><button className="ghostButton" onClick={() => setShowCustom(!showCustom)}>{showCustom ? 'Cancelar criação' : 'Criar magia personalizada'}</button></div>
       {showCustom && <form className="spellForm customSpellForm" onSubmit={addCustomSpell}><label>Nome<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Tópico<input value={form.topic} onChange={(event) => setForm({ ...form, topic: event.target.value })} /></label><label>Tipo<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Comum</option><option>Espiritual</option><option>Divina</option><option>Feitiço</option><option>Demoníaca</option></select></label><label>Mana<input type="number" min="0" value={form.manaCost} onChange={(event) => setForm({ ...form, manaCost: event.target.value })} /></label><label>Foco<input type="number" min="0" value={form.focusCost} onChange={(event) => setForm({ ...form, focusCost: event.target.value })} /></label><label>Humanidade<input type="number" min="0" value={form.humanityCost} onChange={(event) => setForm({ ...form, humanityCost: event.target.value })} /></label><label>Dano ou efeito<input value={form.damage} onChange={(event) => setForm({ ...form, damage: event.target.value })} /></label><label>Alcance<input value={form.range} onChange={(event) => setForm({ ...form, range: event.target.value })} /></label><label className="spanForm">Descrição<textarea rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><button className="primaryButton" type="submit">Criar magia</button></form>}
-      {!grouped.length ? <div className="spellbookEmpty"><Sparkles aria-hidden="true" /><p>Adicione magias do catálogo oficial para montar o grimório.</p></div> : <div className="spellTopics">{grouped.map(([topic, spells]) => <section key={topic}><header><div><span>Tópico</span><h4>{topic}</h4></div><strong>{spells.length}</strong></header><div className="spellList">{spells.map((spell) => <article key={spell.id}><RpgImage src={spell.imageUrl} alt="" className="spellImage" fallback="✦" /><div className="spellMain"><div><strong>{spell.name}</strong><span>{spell.type} · {spell.manaCost} PM{spell.focusCost ? ` · ${spell.focusCost} Foco` : ''}{spell.humanityCost ? ` · ${spell.humanityCost} HM` : ''}</span><small>{Number(spell.successfulUses || 0) >= 3 ? 'Estável após 3 sucessos' : `${spell.successfulUses || 0}/3 usos bem-sucedidos`}</small></div>{spell.damage && <p><b>Dano/Efeito:</b> {spell.damage}</p>}{spell.range && <p><b>Alcance:</b> {spell.range}</p>}<p className="preWrap">{spell.description || 'Sem descrição.'}</p>{editingTopic === spell.id ? <div className="topicEditor"><input aria-label={`Tópico de ${spell.name}`} value={topicDraft} onChange={(event) => setTopicDraft(event.target.value)} /><button className="primaryButton compactButton" onClick={() => saveTopic(spell)}>Salvar</button><button className="ghostButton compactButton" onClick={() => setEditingTopic('')}>Cancelar</button></div> : <button className="topicButton" onClick={() => { setEditingTopic(spell.id); setTopicDraft(spell.topic || 'Sem tópico'); }}>Organizar tópico</button>}<div className="quickActions"><button className="primaryButton compactButton" onClick={() => cast(spell, true)}>Usar com sucesso</button><button className="ghostButton compactButton" onClick={() => cast(spell, false)}>Registrar falha</button><button className="removeButton compactButton" onClick={() => removeSpell(spell)}>Remover</button></div></div></article>)}</div></section>)}</div>}
+      {!grouped.length ? <div className="spellbookEmpty"><Sparkles aria-hidden="true" /><p>Adicione magias do catálogo oficial para montar o grimório.</p></div> : <div className="spellTopics">{grouped.map(([topic, spells]) => <section key={topic}><header><div><span>Tópico</span><h4>{topic}</h4></div><strong>{spells.length}</strong></header><div className="spellList">{spells.map((spell) => { const manaCost = isDemonicSpell(spell) ? demonicSpellCost(character, spell.manaCost) : spell.manaCost; return <article key={spell.id}><RpgImage src={spell.imageUrl} alt="" className="spellImage" fallback="✦" /><div className="spellMain"><div><strong>{spell.name}</strong><span>{spell.type} · {manaCost} PM{spell.focusCost ? ` · ${spell.focusCost} Foco` : ''}{spell.humanityCost ? ` · ${spell.humanityCost} HM` : ''}</span><small>{Number(spell.successfulUses || 0) >= 3 ? 'Estável após 3 sucessos' : `${spell.successfulUses || 0}/3 usos bem-sucedidos`}</small></div>{spell.damage && <p><b>Dano/Efeito:</b> {spell.damage}{isDemonicSpell(spell) && demonicDamageBonus(character) > 0 ? ` · +${demonicDamageBonus(character)} pela Corrupção` : ''}</p>}{spell.range && <p><b>Alcance:</b> {spell.range}</p>}<p className="preWrap">{spell.description || 'Sem descrição.'}</p>{editingTopic === spell.id ? <div className="topicEditor"><input aria-label={`Tópico de ${spell.name}`} value={topicDraft} onChange={(event) => setTopicDraft(event.target.value)} /><button className="primaryButton compactButton" onClick={() => saveTopic(spell)}>Salvar</button><button className="ghostButton compactButton" onClick={() => setEditingTopic('')}>Cancelar</button></div> : <button className="topicButton" onClick={() => { setEditingTopic(spell.id); setTopicDraft(spell.topic || 'Sem tópico'); }}>Organizar tópico</button>}<div className="quickActions"><button className="primaryButton compactButton" onClick={() => cast(spell, true)}>Usar com sucesso</button><button className="ghostButton compactButton" onClick={() => cast(spell, false)}>Registrar falha</button><button className="removeButton compactButton" onClick={() => removeSpell(spell)}>Remover</button></div></div></article>; })}</div></section>)}</div>}
       {!!character.actionHistory?.length && <details className="xpHistory"><summary>Histórico de uso</summary>{character.actionHistory.slice(0, 20).map((action) => <p key={action.id}><b>{action.name}</b> · {action.result || 'Usada'} · {action.manaSpent} PM · {action.focusSpent} Foco · {action.humanitySpent} Humanidade</p>)}</details>}
     </Panel>
   </>;
@@ -376,6 +380,30 @@ function HumanityPanel({ character, classEntry, onChange, requestRoll, recordRol
     <div className="humanityControls"><label>Quantidade<input type="number" min="1" max="100" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><label>Motivo<input value={reason} onChange={(event) => setReason(event.target.value)} /></label></div>
     <div className="quickActions"><button className="primaryButton" disabled={humanity <= 0} onClick={() => apply(-1)}>Gastar Humanidade</button><button disabled={humanity >= 100} onClick={() => apply(1)}>Restaurar</button><button disabled={status.difficulty === null} onClick={rollResistance}>Resistência Divina</button></div>
     {!!character.humanityHistory?.length && <details className="xpHistory"><summary>Histórico de Humanidade</summary>{character.humanityHistory.slice(0, 20).map((entry) => <p key={entry.id}><b>{entry.reason}</b> · Humanidade {entry.humanityBefore} → {entry.humanityAfter} · Divindade {entry.divinityBefore} → {entry.divinityAfter}</p>)}</details>}
+  </Panel>;
+}
+
+function CorruptionPanel({ character, onChange }) {
+  const [amount, setAmount] = useState(1);
+  const [reason, setReason] = useState('Influência do pacto demoníaco');
+  const corruption = corruptionValue(character);
+  const status = corruptionStatus(character);
+  const zoneActive = character.resources?.demonicZoneActive === 1;
+
+  function apply(direction) {
+    const value = Math.max(1, Number(amount) || 1);
+    onChange(changeCorruption(character, direction * value, reason));
+  }
+
+  return <Panel title="Corrupção" subtitle="Pacto e magia demoníaca">
+    <ResourceControl label="Corrupção" current={corruption} max={100} readOnly />
+    <div className="humanityStatus"><strong>{status.name}</strong><p>{status.description}</p></div>
+    <div className="metricGrid"><Metric label="Dano demoníaco" value={`+${demonicDamageBonus(character)}`} /><Metric label="Custo demoníaco" value={`+${demonicDamageBonus(character)} PM`} /><Metric label="Dano na zona" value={`+${demonicIncomingDamageBonus(character)}`} /></div>
+    {zoneActive && <p className="noticeText">Zona Demoníaca ativa: vantagem nos poderes demoníacos e uma rolagem adicional com vantagem a cada 5 turnos.</p>}
+    {!status.playable && <p className="validationError">Manifestação completa: o personagem morreu e não está mais jogável.</p>}
+    <div className="humanityControls"><label>Quantidade<input type="number" min="1" max="100" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><label>Motivo<input value={reason} onChange={(event) => setReason(event.target.value)} /></label></div>
+    <div className="quickActions"><button className="primaryButton" disabled={corruption >= 100} onClick={() => apply(1)}>Adicionar Corrupção</button><button disabled={corruption <= 0} onClick={() => apply(-1)}>Reduzir</button>{status.canCreateZone && <button onClick={() => onChange(toggleDemonicZone(character))}>{zoneActive ? 'Encerrar zona' : 'Criar zona'}</button>}{status.lastOrder && <button className="removeButton" onClick={() => onChange(advanceDemonicTurn(character))}>Avançar turno</button>}</div>
+    {!!character.corruptionHistory?.length && <details className="xpHistory"><summary>Histórico de Corrupção</summary>{character.corruptionHistory.slice(0, 20).map((entry) => <p key={entry.id}><b>{entry.reason}</b> · Corrupção {entry.before} → {entry.after}</p>)}</details>}
   </Panel>;
 }
 

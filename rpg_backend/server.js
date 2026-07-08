@@ -697,6 +697,7 @@ export function prepareCharacterForStorage(raw) {
   character.classXpHistory = compactHistory(character.classXpHistory, 12);
   character.experienceHistory = compactHistory(character.experienceHistory, 12);
   character.humanityHistory = compactHistory(character.humanityHistory, 12);
+  character.corruptionHistory = compactHistory(character.corruptionHistory, 12);
   character.actionHistory = compactHistory(character.actionHistory, 20);
   character.inventory = compactInventory(character.inventory);
   character.equipment = compactInventory(character.equipment);
@@ -707,6 +708,7 @@ export function prepareCharacterForStorage(raw) {
     character.classXpHistory = compactHistory(character.classXpHistory, 5);
     character.experienceHistory = compactHistory(character.experienceHistory, 5);
     character.humanityHistory = compactHistory(character.humanityHistory, 5);
+    character.corruptionHistory = compactHistory(character.corruptionHistory, 5);
     character.actionHistory = compactHistory(character.actionHistory, 8);
     character.levelHistory = compactHistory(character.levelHistory, 8);
     description = characterDescriptionUnchecked(character);
@@ -718,6 +720,7 @@ export function prepareCharacterForStorage(raw) {
     character.classXpHistory = [];
     character.experienceHistory = [];
     character.humanityHistory = [];
+    character.corruptionHistory = [];
     character.actionHistory = compactHistory(character.actionHistory, 5);
     description = characterDescriptionUnchecked(character);
   }

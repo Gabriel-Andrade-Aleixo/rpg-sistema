@@ -45,9 +45,10 @@ const classRules = [
     expected: { defense: 3, initialHp: 32, fixedHp: 12, rollBonus: 4, hybridBonus: 10, level10: { strength: 10, constitution: 7 } },
   },
   {
-    name: 'Mago', id: 'mage', defense: formula(0, { dexterity: .7, constitution: .3 }), hp: null,
+    name: 'Mago', id: 'mage', defense: formula(0, { dexterity: .7, constitution: .3 }),
+    hp: hp(formula(10, { constitution: 3 }), formula(7, { constitution: 1 }), { die: 8, ...formula(0, { constitution: 1 }) }, { die: 6, ...formula(3, { constitution: 1 }) }),
     mana: formula(10, { intelligence: 3 }), progression: [progression(1, 10, { intelligence: 1 })],
-    expected: { defense: 3, mana: 25, level10: { intelligence: 10 } },
+    expected: { defense: 3, initialHp: 22, fixedHp: 11, rollBonus: 4, hybridBonus: 7, mana: 25, level10: { intelligence: 10 } },
   },
   {
     name: 'Arqueiro Espectral', id: 'spectral_archer', defense: formula(0, { constitution: .4, dexterity: .3, intelligence: .3 }),
@@ -91,6 +92,12 @@ const classRules = [
     mana: formula(10, { charisma: 1, intelligence: .5 }), progression: [progression(1, 3, { charisma: 1 }), progression(4, 10, { charisma: 1, constitution: 1 })],
     expected: { defense: 4, initialHp: 24, fixedHp: 9, rollBonus: 4, hybridBonus: 8, mana: 18, level10: { charisma: 10, constitution: 7 } },
   },
+  {
+    name: 'Lutador', id: 'fighter', defense: formula(0, { constitution: .4, strength: .3, dexterity: .3 }),
+    hp: hp(formula(18, { constitution: 3 }), formula(7, { constitution: 1 }), { die: 10, ...formula(0, { constitution: 1 }) }, { die: 6, ...formula(5, { constitution: 1 }) }),
+    progression: [progression(1, 3, { strength: 1 }), progression(4, 10, { strength: 1, dexterity: 1 })],
+    expected: { defense: 3, initialHp: 30, fixedHp: 11, rollBonus: 4, hybridBonus: 9, level10: { strength: 10, dexterity: 7 } },
+  },
 ];
 
 function entryFor(rule) {
@@ -110,7 +117,7 @@ function entryFor(rule) {
   };
 }
 
-test('as nove classes seguem as fórmulas oficiais do documento', () => {
+test('as dez classes seguem as fórmulas oficiais do documento', () => {
   const character = { ...emptyCharacter(), attributes, modifiers: [] };
   for (const rule of classRules) {
     const parsed = parseClass(entryFor(rule));

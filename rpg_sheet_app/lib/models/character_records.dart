@@ -293,6 +293,41 @@ class HumanityRecord {
   );
 }
 
+class CorruptionRecord {
+  const CorruptionRecord({
+    required this.id,
+    required this.before,
+    required this.after,
+    required this.reason,
+    required this.createdAt,
+  });
+
+  final String id;
+  final int before;
+  final int after;
+  final String reason;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'before': before,
+    'after': after,
+    'reason': reason,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory CorruptionRecord.fromJson(Map<String, dynamic> json) =>
+      CorruptionRecord(
+        id: json['id']?.toString() ?? '',
+        before: (json['before'] as num?)?.toInt() ?? 0,
+        after: (json['after'] as num?)?.toInt() ?? 0,
+        reason: json['reason']?.toString() ?? '',
+        createdAt:
+            DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+            DateTime.now(),
+      );
+}
+
 class CharacterSpell {
   const CharacterSpell({
     required this.id,
