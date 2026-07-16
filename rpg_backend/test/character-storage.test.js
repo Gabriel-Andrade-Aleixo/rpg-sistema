@@ -4,7 +4,7 @@ import test from 'node:test';
 process.env.VERCEL = '1';
 const { mergeCharacterUpdate, prepareCharacterForStorage } = await import('../server.js');
 
-test('compacta fichas grandes para caber com folga na descrição do Trello', () => {
+test('prepara fichas grandes para persistir em JSONB no Postgres', () => {
   const character = {
     id: 'char_large',
     name: 'Personagem grande',
@@ -17,8 +17,8 @@ test('compacta fichas grandes para caber com folga na descrição do Trello', ()
   };
   const compact = prepareCharacterForStorage(character);
   assert.equal(compact.modifiers, undefined);
-  assert.ok(compact.rollHistory.length <= 12);
-  assert.ok(JSON.stringify(compact).length < 15800);
+  assert.ok(compact.rollHistory.length <= 100);
+  assert.ok(compact.lore.length <= 12000);
 });
 
 test('mescla somente campos alterados sobre a revisão mais recente', () => {

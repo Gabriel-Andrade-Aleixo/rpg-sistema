@@ -1834,7 +1834,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
   Widget _proficiencySection() {
     if (widget.catalog.skills.isEmpty) {
       return const Text(
-        'Nenhuma perícia encontrada na lista Perícias do Trello.',
+        'Nenhuma perícia encontrada no catálogo oficial.',
       );
     }
     return Column(

@@ -13,7 +13,7 @@ class CatalogRepository {
     if (!refresh && _cache != null) return _cache!;
     if (!_backend.isConfigured) {
       throw StateError(
-        'Configure BACKEND_URL para carregar o catalogo oficial do Trello.',
+        'Configure BACKEND_URL para carregar o catálogo oficial.',
       );
     }
     final catalog = await _backend.loadCatalog(refresh: refresh);
@@ -23,7 +23,7 @@ class CatalogRepository {
 
   Future<CatalogEntry> createItem(Map<String, dynamic> item) async {
     if (!_backend.isConfigured) {
-      throw StateError('Configure BACKEND_URL para criar itens no Trello.');
+      throw StateError('Configure BACKEND_URL para criar itens no catálogo.');
     }
     final created = await _backend.createCatalogItem(item);
     _cache = null;

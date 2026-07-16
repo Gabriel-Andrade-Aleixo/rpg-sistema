@@ -79,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ]) async {
     if (catalog.entries.isEmpty) {
       _message(
-        'O catálogo oficial está indisponível. Sincronize o Trello antes de criar ou editar fichas.',
+        'O catálogo oficial está indisponível. Sincronize o Supabase antes de criar ou editar fichas.',
       );
       return;
     }
@@ -281,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (data.catalogError != null)
           MaterialBanner(
             content: const Text(
-              'O catálogo do Trello está temporariamente indisponível.',
+              'O catálogo oficial está temporariamente indisponível.',
             ),
             leading: const Icon(Icons.cloud_off_outlined),
             actions: [
@@ -330,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Crie sua primeira ficha usando as raças, classes e equipamentos oficiais do Trello.',
+              'Crie sua primeira ficha usando as raças, classes e equipamentos oficiais do catálogo.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -623,7 +623,7 @@ class _LoadingState extends StatelessWidget {
         const CircularProgressIndicator(),
         const SizedBox(height: 14),
         Text(
-          'Sincronizando Trello...',
+          'Sincronizando catálogo...',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],

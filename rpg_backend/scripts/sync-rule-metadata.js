@@ -1,18 +1,21 @@
 import fs from 'node:fs';
 
-loadDotEnv();
+import { closePool } from '../lib/postgres.js';
+import {
+  loadCatalogFromDatabase,
+  normalizeText,
+  replaceMetadataBlock,
+  upsertCatalogEntry,
+} from '../lib/catalogStore.js';
 
-const key = process.env.TRELLO_API_KEY || '';
-const token = process.env.TRELLO_TOKEN || '';
-const boardId = process.env.TRELLO_BOARD_ID || '';
-if (!key || !token || !boardId) throw new Error('Credenciais ou TRELLO_BOARD_ID ausentes no .env.');
+loadDotEnv();
 
 const f = (base, terms = {}) => ({ base, terms });
 const hp = (initial, fixed, roll, hybrid) => ({ initial, perLevel: { fixed, roll, hybrid } });
 const progression = (from, to, grants) => ({ from, to, perLevel: grants });
 
 const classes = {
-  Barbaro: {
+  Bárbaro: {
     id: 'barbarian', defense: f(0, { dexterity: .5, constitution: .5 }),
     hp: hp(f(20, { constitution: 3 }), f(8, { constitution: 1 }), { die: 12, ...f(0, { constitution: 1 }) }, { die: 6, ...f(6, { constitution: 1 }) }),
     attributeProgression: [progression(1, 3, { strength: 1 }), progression(4, 10, { strength: 1, constitution: 1 })],
@@ -40,14 +43,14 @@ const classes = {
     attributeProgression: [progression(1, 3, { dexterity: 1 }), progression(4, 10, { dexterity: 1, intelligence: 1 })],
     allowedCombatXpAttributes: ['dexterity', 'intelligence'],
   },
-  'Maestro Tatico': {
+  'Maestro Tático': {
     id: 'tactical_maestro', defense: f(0, { dexterity: .4, charisma: .4, intelligence: .2 }),
     hp: hp(f(10, { constitution: 3, charisma: 2 }), f(5, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 4, ...f(4, { constitution: 1 }) }),
     mana: f(7, { intelligence: 1, charisma: 3 }), resources: [{ id: 'compasso', name: 'Compasso', maximum: f(3) }],
     attributeProgression: [progression(1, 3, { charisma: 1 }), progression(4, 10, { charisma: 1, intelligence: 1 })],
     allowedCombatXpAttributes: ['charisma', 'intelligence'],
   },
-  Clerigo: {
+  Clérigo: {
     id: 'cleric', defense: f(0, { dexterity: .2, constitution: .4, faith: .4 }),
     hp: hp(f(16, { constitution: 3 }), f(7, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 6, ...f(5, { constitution: 1 }) }),
     mana: f(10, { intelligence: 1, faith: 2 }),
@@ -112,45 +115,33 @@ const races = {
   },
 };
 
-await updateCards('Classes', classes, 'class');
-await updateCards('Racas', races, 'race');
-console.log(`Metadados sincronizados: ${Object.keys(classes).length} classes e ${Object.keys(races).length} raças.`);
+try {
+  await updateEntries('Classes', classes, 'class');
+  await updateEntries('Racas', races, 'race');
+  console.log(`Metadados sincronizados: ${Object.keys(classes).length} classes e ${Object.keys(races).length} raças.`);
+} finally {
+  await closePool();
+}
 
-async function updateCards(listName, rules, type) {
-  const lists = await trello('GET', `/1/boards/${boardId}/lists`, { fields: 'name,closed' });
-  const list = lists.find((item) => normalize(item.name) === normalize(listName) && !item.closed);
-  if (!list) throw new Error(`Lista não encontrada: ${listName}`);
-  const cards = await trello('GET', `/1/lists/${list.id}/cards`, { fields: 'name,desc,closed', limit: 1000 });
+async function updateEntries(categoryName, rules, type) {
+  const catalog = await loadCatalogFromDatabase();
+  const entries = catalog.entries.filter((entry) => normalizeText(entry.category) === normalizeText(categoryName));
   for (const [name, rule] of Object.entries(rules)) {
-    const card = cards.find((item) => normalize(item.name) === normalize(name) && !item.closed);
-    if (!card) throw new Error(`Cartão não encontrado em ${listName}: ${name}`);
+    const existing = entries.find((entry) => normalizeText(entry.name) === normalizeText(name));
     const metadata = { schemaVersion: 1, type, ...rule };
-    const desc = replaceBlock(card.desc || '', metadata);
-    await trello('PUT', `/1/cards/${card.id}`, { desc });
+    const description = replaceMetadataBlock(existing?.description || `# ${name}`, metadata);
+    await upsertCatalogEntry(categoryName, {
+      name,
+      description,
+      labels: [{ id: `label_${type}`, name: type === 'class' ? 'Classe' : 'Raça', color: type === 'class' ? 'blue' : 'green' }],
+      metadata,
+    });
   }
 }
 
-function replaceBlock(description, metadata) {
-  const start = '<!-- RPG_RULES_JSON_START -->';
-  const end = '<!-- RPG_RULES_JSON_END -->';
-  const clean = description.replace(new RegExp(`${start}[\\s\\S]*?${end}`, 'g'), '').trim();
-  return `${clean}\n\n---\nMetadados usados automaticamente pelos aplicativos. Edite com cuidado.\n${start}\n${JSON.stringify(metadata, null, 2)}\n${end}`;
-}
-
-async function trello(method, path, payload = {}) {
-  const url = new URL(path, 'https://api.trello.com');
-  url.searchParams.set('key', key); url.searchParams.set('token', token);
-  const options = { method };
-  if (method === 'GET') for (const [name, value] of Object.entries(payload)) url.searchParams.set(name, String(value));
-  else { options.headers = { 'Content-Type': 'application/json; charset=utf-8' }; options.body = JSON.stringify(payload); }
-  const response = await fetch(url, options); const text = await response.text();
-  if (!response.ok) throw new Error(`Trello ${response.status}: ${text}`);
-  return text ? JSON.parse(text) : null;
-}
-
-function normalize(value) { return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
 function loadDotEnv() {
-  const path = new URL('../.env', import.meta.url); if (!fs.existsSync(path)) return;
+  const path = new URL('../.env', import.meta.url);
+  if (!fs.existsSync(path)) return;
   for (const line of fs.readFileSync(path, 'utf8').split(/\r?\n/)) {
     const trimmed = line.trim(); if (!trimmed || trimmed.startsWith('#')) continue;
     const index = trimmed.indexOf('='); if (index < 0) continue;

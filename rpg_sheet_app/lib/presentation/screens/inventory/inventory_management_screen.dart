@@ -352,7 +352,7 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen> {
             Text(
               entry?.displayDescription ??
                   item?.description ??
-                  'Sem descrição no Trello.',
+                  'Sem descrição no catálogo.',
             ),
             if (item?.bonus.isNotEmpty == true) ...[
               const SizedBox(height: 12),

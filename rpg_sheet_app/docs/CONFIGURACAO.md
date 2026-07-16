@@ -1,6 +1,6 @@
 # Configuração
 
-O Flutter acessa o Trello exclusivamente pelo backend Node.js. Chaves e tokens nunca devem ser enviados no aplicativo.
+O Flutter acessa o Supabase/Postgres exclusivamente pelo backend Node.js. A URL do banco nunca deve ser enviada no aplicativo.
 
 ## Backend
 
@@ -11,7 +11,7 @@ cd ../rpg_backend
 node server.js
 ```
 
-O backend expõe personagens e o catálogo oficial do quadro `GERENCIAMENTO RPG`.
+O backend expõe personagens e o catálogo oficial salvo no Supabase.
 
 ## Flutter
 
@@ -33,7 +33,7 @@ Em um celular físico, troque `localhost` pelo IP do computador na rede local. S
 
 ## Fonte oficial
 
-- Raças, classes, itens, equipamentos, habilidades e proficiências são lidos dos cartões do Trello.
-- Imagens usam o anexo/capa do cartão; sem anexo, o app mostra um fallback visual.
+- Raças, classes, itens, equipamentos, habilidades e proficiências são lidos do catálogo oficial no Supabase.
+- Imagens usam a URL cadastrada no item/magia; sem imagem, o app mostra um fallback visual.
 - Regras ausentes permanecem indisponíveis e geram aviso. O app não cria valores genéricos.
-- Personagens são salvos como JSON entre os marcadores do cartão na lista `Personagens`.
+- Personagens são salvos em JSONB na tabela `characters`, com histórico em `character_revisions`.

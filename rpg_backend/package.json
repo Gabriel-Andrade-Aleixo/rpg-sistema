@@ -13,9 +13,13 @@
     "sync:document": "pwsh -NoProfile -File scripts/sync-document-rules.ps1",
     "sync:armors": "node scripts/sync-armors.js",
     "sync:spells": "node scripts/sync-divine-spells.js",
+    "migrate:trello": "node scripts/migrate-trello-to-postgres.js",
     "audit:rules": "node scripts/audit-system-rules.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
   }
 }

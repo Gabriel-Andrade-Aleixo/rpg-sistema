@@ -56,7 +56,7 @@ class RuleValidationService {
       errors.add('O limite absoluto de um atributo é +20.');
     }
     if (catalog.entries.isEmpty) {
-      errors.add('O catálogo do Trello está vazio ou indisponível.');
+      errors.add('O catálogo oficial está vazio ou indisponível.');
     }
     if (character.maxHp <= 0) {
       errors.add('A vida inicial ainda não foi definida.');
@@ -78,7 +78,7 @@ class RuleValidationService {
     final warnings = <String>[];
     if (item.description.toLowerCase().contains('requisito')) {
       warnings.add(
-        'Confira os requisitos descritos no cartão antes de equipar.',
+        'Confira os requisitos descritos no cadastro antes de equipar.',
       );
     }
     return RuleValidationResult(warnings: warnings);

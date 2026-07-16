@@ -110,5 +110,5 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await page.getByRole('button', { name: 'Novo' }).click();
   await page.getByLabel('Nome').fill('Luva do Mestre');
   await page.getByRole('button', { name: 'Criar item' }).click();
-  await expect(page.getByText('Item criado no Trello.')).toBeVisible();
+  await expect(page.getByText('Item criado na biblioteca oficial.')).toBeVisible();
 });

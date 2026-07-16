@@ -96,10 +96,10 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
           <p className="muted">Se a imagem falhar ou estiver vazia, o fallback padrão será exibido.</p>
         </div>}
 
-        {step === 2 && <OfficialSelection entries={groups.playableRaces} selectedId={draft.raceId} onSelect={(id) => update({ raceId: id, raceVariant: '' })} empty="Nenhuma raça com regras completas foi encontrada no Trello." />}
+        {step === 2 && <OfficialSelection entries={groups.playableRaces} selectedId={draft.raceId} onSelect={(id) => update({ raceId: id, raceVariant: '' })} empty="Nenhuma raça com regras completas foi encontrada no catálogo oficial." />}
         {step === 2 && parsedRace && <><VariantSelection variants={parsedRace.variants} selected={draft.raceVariant} onSelect={(raceVariant) => update({ raceVariant })} /><RuleSummary entry={race} chips={parsedRace.modifiers.map((item) => `${item.targetId}: ${Number(item.value) >= 0 ? '+' : ''}${item.value}`)} lines={[...parsedRace.proficiencies, ...parsedRace.abilities, ...parsedRace.traits]} /></>}
 
-        {step === 3 && <OfficialSelection entries={groups.playableClasses} selectedId={draft.classId} onSelect={(id) => update(id === draft.classId ? {} : { classId: id, maxHp: 0, currentHp: 0, levelHistory: [] })} empty="Nenhuma classe com regras completas foi encontrada no Trello." />}
+        {step === 3 && <OfficialSelection entries={groups.playableClasses} selectedId={draft.classId} onSelect={(id) => update(id === draft.classId ? {} : { classId: id, maxHp: 0, currentHp: 0, levelHistory: [] })} empty="Nenhuma classe com regras completas foi encontrada no catálogo oficial." />}
         {step === 3 && parsedClass && <RuleSummary entry={characterClass} chips={[
           parsedClass.hitDie ? `Dado d${parsedClass.hitDie}` : 'Dado de vida não informado',
           parsedClass.initialHpFormula?.label || (parsedClass.baseHp !== null ? `Vida inicial ${parsedClass.baseHp}` : 'Vida inicial não informada'),
@@ -128,7 +128,7 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
           <button className="primaryButton" disabled={!parsedClass || (draft.hpProgressionMode !== 'fixed' && !initialHealthRoll)} onClick={defineHealth}>Confirmar e calcular vida do nível 1</button>
           <div className="resourceHeadline"><strong>Vida registrada</strong><span>{draft.currentHp}/{draft.maxHp}</span></div>
           {!parsedClass && <Notice text="Selecione uma classe antes de definir a vida." />}
-          {parsedClass && !parsedClass.hitDie && !parsedClass.initialHpFormula && parsedClass.baseHp === null && <Notice text="A classe não possui vida inicial reconhecível. Ajuste o cartão no Trello." />}
+          {parsedClass && !parsedClass.hitDie && !parsedClass.initialHpFormula && parsedClass.baseHp === null && <Notice text="A classe não possui vida inicial reconhecível. Ajuste o cadastro oficial." />}
         </div>}
 
         {step === 7 && <div>
@@ -167,7 +167,7 @@ function VariantSelection({ variants, selected, onSelect }) {
 }
 
 function RuleSummary({ entry, chips, lines }) {
-  return <div className="ruleSummary"><div className="chipRow">{chips.map((chip) => <span key={chip}>{chip}</span>)}</div>{lines.map((line) => <p key={line}>{line}</p>)}<details><summary>Descrição completa do Trello</summary><p className="preWrap">{displayDescription(entry) || 'Cartão sem descrição.'}</p></details></div>;
+  return <div className="ruleSummary"><div className="chipRow">{chips.map((chip) => <span key={chip}>{chip}</span>)}</div>{lines.map((line) => <p key={line}>{line}</p>)}<details><summary>Descrição completa</summary><p className="preWrap">{displayDescription(entry) || 'Cadastro sem descrição.'}</p></details></div>;
 }
 
 function SimpleRules({ values, empty, icon }) {
@@ -176,7 +176,7 @@ function SimpleRules({ values, empty, icon }) {
 }
 
 function ProficiencySelection({ skills, automatic, selected, onChange }) {
-  if (!skills.length) return <Notice text="Nenhuma perícia oficial foi encontrada no Trello." />;
+  if (!skills.length) return <Notice text="Nenhuma perícia oficial foi encontrada no catálogo." />;
   const isAutomatic = (name) => automatic.some((item) => normalize(item) === normalize(name));
   const isSelected = (name) => selected.some((item) => normalize(item) === normalize(name));
   return <div><p className="muted">Uma perícia proficiente adiciona novamente seu valor bruto à rolagem.</p><div className="proficiencyChoiceGrid">{skills.map((skill) => { const automaticValue = isAutomatic(skill.name), checked = automaticValue || isSelected(skill.name); return <label className="proficiencyChoice" key={skill.id}><input type="checkbox" checked={checked} disabled={automaticValue} onChange={(event) => { const next = selected.filter((item) => normalize(item) !== normalize(skill.name)); if (event.target.checked) next.push(skill.name); onChange(next); }} /><span><strong>{skill.name}</strong><small>{automaticValue ? 'Raça ou classe' : 'Escolhida'}</small></span></label>; })}</div></div>;

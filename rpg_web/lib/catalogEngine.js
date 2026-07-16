@@ -251,7 +251,7 @@ export function parseEquipmentModifiers(entry) {
   if (metadata?.type === 'item' && Array.isArray(metadata.modifiers)) {
     return metadata.modifiers
       .filter((item) => item?.targetId && Number(item.value))
-      .map((item) => ({ id: `${entry.id}_${item.targetId}`, sourceId: entry.id, sourceName: entry.name, sourceType: 'equipment', targetType: item.targetType || 'stat', targetId: item.targetId, value: Number(item.value), operation: 'add', description: 'Bônus estruturado do cartão do Trello.' }));
+      .map((item) => ({ id: `${entry.id}_${item.targetId}`, sourceId: entry.id, sourceName: entry.name, sourceType: 'equipment', targetType: item.targetType || 'stat', targetId: item.targetId, value: Number(item.value), operation: 'add', description: 'Bônus estruturado do catálogo oficial.' }));
   }
   const modifiers = parseAttributeModifiers(entry, 'equipment');
   const targets = { defense: ['defesa'], armorClass: ['ca', 'classe de armadura'], attack: ['ataque', 'acerto'], damage: ['dano'], health: ['vida', 'hp'], mana: ['mana'] };
@@ -294,7 +294,7 @@ function parseAttributeModifiers(entry, sourceType) {
 }
 
 function modifier(entry, sourceType, targetType, targetId, value) {
-  return { id: `${entry?.id}_${targetId}`, sourceId: entry?.id || '', sourceName: entry?.name || '', sourceType, targetType, targetId, value, operation: 'add', description: 'Regra extraída do cartão oficial do Trello.' };
+  return { id: `${entry?.id}_${targetId}`, sourceId: entry?.id || '', sourceName: entry?.name || '', sourceType, targetType, targetId, value, operation: 'add', description: 'Regra extraída do catálogo oficial.' };
 }
 
 export function recalculateCharacter(character, catalog) {
@@ -491,7 +491,7 @@ export function validateCharacter(character, catalog) {
   if (Object.values(character.attributes || {}).some((value) => Number(value) < 0)) errors.push('Atributos não podem ser negativos.');
   if (Object.values(character.attributes || {}).some((value) => Number(value) > 20)) errors.push('O limite absoluto de um atributo é +20.');
   if (spentInitialAttributePoints(character.attributes) > 10) errors.push('A distribuição inicial excede os 10 pontos disponíveis.');
-  if (!(catalog?.entries || []).length) errors.push('O catálogo do Trello está vazio ou indisponível.');
+  if (!(catalog?.entries || []).length) errors.push('O catálogo oficial está vazio ou indisponível.');
   if (Number(character.maxHp) <= 0) errors.push('A vida inicial ainda não foi definida.');
   if (!character.imageUrl) suggestions.push('Adicione um avatar ao personagem.');
   return { errors, warnings, suggestions, isValid: errors.length === 0 };

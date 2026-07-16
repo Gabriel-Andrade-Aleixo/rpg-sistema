@@ -58,14 +58,14 @@ class _AdminScreenState extends State<AdminScreen> {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         Text(
-                          'Conteúdo oficial sincronizado com o Trello.',
+                          'Conteúdo oficial salvo no Supabase.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
                   ),
                   IconButton.filledTonal(
-                    tooltip: 'Sincronizar Trello',
+                    tooltip: 'Sincronizar catálogo',
                     onPressed: widget.onRefresh,
                     icon: const Icon(Icons.sync),
                   ),
@@ -350,7 +350,7 @@ class _AdminScreenState extends State<AdminScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Excluir ${entry.name}?'),
-        content: const Text('O cartão será arquivado no Trello.'),
+        content: const Text('O cadastro será removido da biblioteca oficial.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -660,7 +660,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             },
                     ),
               child: Text(
-                entry == null ? 'Criar no Trello' : 'Salvar alterações',
+                entry == null ? 'Criar cadastro' : 'Salvar alterações',
               ),
             ),
           ],
@@ -688,7 +688,7 @@ class _AdminScreenState extends State<AdminScreen> {
     await _runAction(
       context,
       () => widget.onSaveEntry(kind, result, entry?.id),
-      '${kind == 'spell' ? 'Magia' : 'Item'} salvo no Trello.',
+      '${kind == 'spell' ? 'Magia' : 'Item'} salvo na biblioteca oficial.',
     );
   }
 

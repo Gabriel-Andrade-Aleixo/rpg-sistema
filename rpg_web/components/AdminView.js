@@ -49,7 +49,7 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     try {
       if (onSaveCatalogEntry) await onSaveCatalogEntry(editor.kind, editor.value, editor.id);
       else if (editor.kind === 'item' && onCreateItem) await onCreateItem(editor.value);
-      setMessage(`${editor.kind === 'spell' ? 'Magia' : 'Item'} ${editor.id ? 'atualizado' : 'criado'} no Trello.`);
+      setMessage(`${editor.kind === 'spell' ? 'Magia' : 'Item'} ${editor.id ? 'atualizado' : 'criado'} na biblioteca oficial.`);
       setEditor(null);
     } catch (error) {
       setMessage(error.message);
@@ -74,7 +74,7 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   }
 
   return <section className="viewPage adminWorkspace">
-    <header className="viewHeader"><div><span className="eyebrow">Administração</span><h2>Biblioteca oficial</h2><p>Gerencie o conteúdo sincronizado com o Trello.</p></div><button className="ghostButton refreshButton" onClick={onRefresh}><RefreshCw aria-hidden="true" />Sincronizar</button></header>
+    <header className="viewHeader"><div><span className="eyebrow">Administração</span><h2>Biblioteca oficial</h2><p>Gerencie o conteúdo salvo no Supabase.</p></div><button className="ghostButton refreshButton" onClick={onRefresh}><RefreshCw aria-hidden="true" />Sincronizar</button></header>
     <nav className="adminTabs" aria-label="Áreas do modo mestre">
       <button className={tab === 'overview' ? 'active' : ''} onClick={() => { setTab('overview'); setEditor(null); }}><LayoutDashboard aria-hidden="true" />Visão geral</button>
       <button className={tab === 'items' ? 'active' : ''} onClick={() => { setTab('items'); setEditor(null); }}><Package aria-hidden="true" />Itens <span>{groups.items.length}</span></button>
@@ -83,7 +83,7 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     {message && <p className={/criado|atualizado|removido/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
     {tab === 'overview' ? <>
       <div className="adminGrid">{metrics.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}</div>
-      <section className="adminDiagnostic"><div><h3>Qualidade do catálogo</h3><p>{invalid ? `${invalid} ficha(s) precisam de revisão de raça ou classe.` : 'As fichas estão consistentes com o catálogo atual.'}</p></div><div><strong>{catalog.board?.name || 'GERENCIAMENTO RPG'}</strong><span>Fonte oficial no Trello</span></div></section>
+      <section className="adminDiagnostic"><div><h3>Qualidade do catálogo</h3><p>{invalid ? `${invalid} ficha(s) precisam de revisão de raça ou classe.` : 'As fichas estão consistentes com o catálogo atual.'}</p></div><div><strong>{catalog.board?.name || 'RPG Supabase'}</strong><span>Fonte oficial no Supabase</span></div></section>
     </> : <div className={`catalogManager ${editor ? 'editing' : ''}`}>
       <section className="catalogManagerList">
         <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}`} placeholder={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}...`} value={search} onChange={(event) => setSearch(event.target.value)} /></label><button className="primaryButton" onClick={() => beginCreate(tab === 'spells' ? 'spell' : 'item')}><Plus aria-hidden="true" />Novo</button></div>

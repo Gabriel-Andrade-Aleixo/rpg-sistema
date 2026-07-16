@@ -120,7 +120,7 @@ class _LevelUpScreenState extends State<LevelUpScreen> {
             _summary('Método de vida', method.label),
             _summary(
               'Base e modificadores no novo nível',
-              formulaValue?.toString() ?? 'não definido no cartão',
+              formulaValue?.toString() ?? 'não definido no cadastro',
             ),
             if (method != HpProgressionMode.fixed) ...[
               const SizedBox(height: 10),
@@ -141,12 +141,12 @@ class _LevelUpScreenState extends State<LevelUpScreen> {
             _summary(
               'Pontos de habilidade',
               widget.characterClass.skillPointsPerLevel?.toString() ??
-                  'não informado no Trello',
+                  'não informado no catálogo',
             ),
             _summary(
               'Pontos de classe',
               widget.characterClass.classPointsPerLevel?.toString() ??
-                  'não informado no Trello',
+                  'não informado no catálogo',
             ),
             _summary(
               'Habilidades',

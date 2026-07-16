@@ -272,7 +272,7 @@ class TrelloParserService {
               targetType: item['targetType']?.toString() ?? 'stat',
               targetId: item['targetId']?.toString() ?? '',
               value: (item['value'] as num?) ?? 0,
-              description: 'Bônus estruturado do cartão do Trello.',
+              description: 'Bônus estruturado do catálogo oficial.',
             );
           })
           .where((item) => item.targetId.isNotEmpty && item.value != 0)
@@ -320,7 +320,7 @@ class TrelloParserService {
               targetType: 'attribute',
               targetId: target.key,
               value: value,
-              description: 'Bônus descrito no cartão oficial do Trello.',
+              description: 'Bônus descrito no catálogo oficial.',
             ),
           );
           break;
@@ -358,7 +358,7 @@ class TrelloParserService {
             targetType: 'stat',
             targetId: target.key,
             value: value,
-            description: 'Efeito descrito no cartão oficial do Trello.',
+            description: 'Efeito descrito no catálogo oficial.',
           ),
         );
         break;
@@ -453,7 +453,7 @@ class TrelloParserService {
         targetType: targetType,
         targetId: normalizeCatalogText(item.key.toString()),
         value: (item.value as num?) ?? 0,
-        description: 'Regra estruturada no cartão oficial do Trello.',
+        description: 'Regra estruturada no catálogo oficial.',
       ),
   ];
 

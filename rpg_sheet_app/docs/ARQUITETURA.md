@@ -8,9 +8,9 @@ Pasta irma: `../rpg_backend/`
 
 Responsabilidades:
 
-- Guardar `TRELLO_API_KEY` e `TRELLO_TOKEN` fora do app.
-- Criar/usar o quadro Trello.
-- Criar listas necessarias.
+- Guardar `DATABASE_URL` fora do app.
+- Criar/usar as tabelas do Supabase/Postgres.
+- Gerenciar categorias e entradas oficiais do catálogo.
 - Fazer CRUD de personagens.
 - Expor API HTTP para mobile e web.
 
@@ -32,7 +32,7 @@ Pastas principais:
 - `rpg_sheet_app/ios/`
 - `rpg_sheet_app/lib/`
 
-Roda o mesmo app Flutter. Em producao, deve usar `BACKEND_URL` em vez de token Trello direto.
+Roda o mesmo app Flutter. Em producao, deve usar `BACKEND_URL`; a URL do banco nunca vai para o app.
 
 ## Web
 

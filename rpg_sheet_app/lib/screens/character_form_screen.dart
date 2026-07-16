@@ -287,7 +287,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
     final races = widget.catalog.playableRaces;
     if (races.isEmpty) {
       return _missing(
-        'Nenhuma raça com regras completas foi encontrada no Trello.',
+        'Nenhuma raça com regras completas foi encontrada no catálogo oficial.',
       );
     }
     return Column(
@@ -353,7 +353,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
     final classes = widget.catalog.playableClasses;
     if (classes.isEmpty) {
       return _missing(
-        'Nenhuma classe com regras completas foi encontrada no Trello.',
+        'Nenhuma classe com regras completas foi encontrada no catálogo oficial.',
       );
     }
     return Column(
@@ -490,7 +490,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
     };
     final skills = widget.catalog.skills;
     if (skills.isEmpty) {
-      return _missing('Nenhuma perícia oficial foi encontrada no Trello.');
+      return _missing('Nenhuma perícia oficial foi encontrada no catálogo.');
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -623,7 +623,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
         Text('Vida registrada: ${_character.currentHp}/${_character.maxHp}'),
         if (item.hpInitialFormula == null)
           _missing(
-            'A classe não possui fórmula estruturada de HP inicial. Ajuste o bloco RPG_RULES_JSON no cartão.',
+            'A classe não possui fórmula estruturada de HP inicial. Ajuste o bloco RPG_RULES_JSON no cadastro.',
           ),
       ],
     );
@@ -635,7 +635,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (items.isEmpty)
-          _missing('Nenhum item ou equipamento foi encontrado no Trello.'),
+          _missing('Nenhum item ou equipamento foi encontrado no catálogo.'),
         for (final item in items)
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
@@ -658,7 +658,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
           .map((item) => item.name),
     ];
     return values.isEmpty
-        ? _missing('Nenhuma habilidade inicial foi identificada no Trello.')
+        ? _missing('Nenhuma habilidade inicial foi identificada no catálogo.')
         : Column(
             children: [
               for (final item in values)

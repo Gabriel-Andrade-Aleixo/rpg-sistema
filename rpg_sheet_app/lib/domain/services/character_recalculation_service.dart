@@ -108,7 +108,7 @@ class CharacterRecalculationService {
             targetType: 'attribute',
             targetId: grant.key,
             value: grant.value * attained,
-            description: 'Progressão automática definida no cartão da classe.',
+            description: 'Progressão automática definida no cadastro da classe.',
           ),
         );
       }

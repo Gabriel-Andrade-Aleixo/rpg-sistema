@@ -45,7 +45,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${entries.length} de ${widget.catalog.entries.length} entradas do Trello',
+                  '${entries.length} de ${widget.catalog.entries.length} entradas oficiais',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 14),
@@ -144,7 +144,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               const SizedBox(height: 12),
               Text(
                 entry.displayDescription.isEmpty
-                    ? 'O cartão não possui descrição.'
+                    ? 'O cadastro não possui descrição.'
                     : entry.displayDescription,
               ),
               if (entry.labels.isNotEmpty) ...[
@@ -162,8 +162,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ],
                 ),
               ],
-              const SizedBox(height: 12),
-              SelectableText('Origem: ${entry.sourceUrl}'),
+              if (entry.sourceUrl.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SelectableText('Origem: ${entry.sourceUrl}'),
+              ],
             ],
           ),
         ),

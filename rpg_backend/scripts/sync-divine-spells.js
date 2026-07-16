@@ -1,43 +1,87 @@
+import fs from 'node:fs';
+
 import { divineSpells } from '../data/divine-spells.js';
 import { spectralArrowSpells } from '../data/spectral-arrow-spells.js';
+import { closePool } from '../lib/postgres.js';
+import { normalizeText, upsertCatalogEntry } from '../lib/catalogStore.js';
 
-const backendUrl = process.env.BACKEND_URL || 'http://localhost:8787';
+loadDotEnv();
 
-const normalize = (value) => String(value)
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim();
-
-const catalogResponse = await fetch(`${backendUrl}/catalog?refresh=true`);
-const catalogData = await catalogResponse.json();
-if (!catalogResponse.ok || catalogData.ok !== true) {
-  throw new Error(catalogData.error || `Catálogo respondeu ${catalogResponse.status}.`);
+let synced = 0;
+try {
+  for (const spell of [...divineSpells, ...spectralArrowSpells]) {
+    const entry = spellEntry(spell);
+    await upsertCatalogEntry('Magias', entry);
+    synced += 1;
+  }
+  console.log(`Sincronização concluída: ${synced} magia(s) cadastrada(s) ou atualizada(s).`);
+} finally {
+  await closePool();
 }
 
-const names = new Set((catalogData.catalog?.entries || [])
-  .filter((entry) => normalize(entry.category) === 'magias')
-  .map((entry) => normalize(entry.name)));
-let created = 0;
-let skipped = 0;
-
-for (const spell of [...divineSpells, ...spectralArrowSpells]) {
-  if (names.has(normalize(spell.name))) {
-    skipped += 1;
-    continue;
-  }
-  const response = await fetch(`${backendUrl}/catalog/spells`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ spell }),
-  });
-  const data = await response.json();
-  if (!response.ok || data.ok !== true) {
-    throw new Error(`${spell.name}: ${data.error || response.status}`);
-  }
-  names.add(normalize(spell.name));
-  created += 1;
-  console.log(`Criada: ${spell.name}`);
+function spellEntry(spell) {
+  const name = String(spell.name || '').trim();
+  const school = String(spell.school || 'Outra').trim();
+  const level = Math.max(0, Math.min(20, Number(spell.level) || 0));
+  const topic = String(spell.topic || '').trim();
+  const className = String(spell.className || '').trim();
+  const manaCost = Math.max(0, Number(spell.manaCost) || 0);
+  const focusCost = Math.max(0, Number(spell.focusCost) || 0);
+  const humanityCost = Math.max(0, Number(spell.humanityCost) || 0);
+  const metadata = {
+    schemaVersion: 1,
+    type: 'spell',
+    school: normalizeText(school),
+    level,
+    costs: { mana: manaCost, focus: focusCost, humanity: humanityCost },
+    topic,
+    className,
+    actionType: spell.actionType || '',
+    actionId: spell.actionId || '',
+    range: spell.range || '',
+    damage: spell.damage || '',
+  };
+  const description = [
+    `# ${name}`,
+    '',
+    `**Tipo:** ${school}`,
+    `**Nível:** ${level}`,
+    topic ? `**Tópico:** ${topic}` : '',
+    className ? `**Classe:** ${className}` : '',
+    `**Custo:** ${manaCost} PM${focusCost ? ` · ${focusCost} Foco` : ''}${humanityCost ? ` · ${humanityCost} Humanidade` : ''}`,
+    spell.range ? `**Alcance:** ${spell.range}` : '',
+    spell.damage ? `**Dano/Efeito:** ${spell.damage}` : '',
+    '',
+    spell.description || 'Magia cadastrada pelo sistema.',
+    '',
+    '---',
+    'Metadados usados automaticamente pelos aplicativos. Edite com cuidado.',
+    '<!-- RPG_RULES_JSON_START -->',
+    JSON.stringify(metadata, null, 2),
+    '<!-- RPG_RULES_JSON_END -->',
+  ].filter((line) => line !== '').join('\n');
+  return {
+    name,
+    description,
+    labels: [
+      { id: 'label_magia', name: 'Magia', color: 'purple' },
+      { id: `label_magia_${normalizeText(school).replace(/[^a-z0-9]+/g, '_')}`, name: `Magia: ${school}`, color: school === 'Divina' ? 'yellow' : school === 'Demoníaca' ? 'red' : 'blue' },
+      ...(topic ? [{ id: `label_topico_${normalizeText(topic).replace(/[^a-z0-9]+/g, '_')}`, name: topic, color: level >= 3 ? 'red' : level === 2 ? 'orange' : 'green' }] : []),
+    ],
+    metadata,
+  };
 }
 
-console.log(`Sincronização concluída: ${created} criada(s), ${skipped} já existente(s).`);
+function loadDotEnv() {
+  const path = new URL('../.env', import.meta.url);
+  if (!fs.existsSync(path)) return;
+  for (const line of fs.readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const index = trimmed.indexOf('=');
+    if (index < 0) continue;
+    const key = trimmed.slice(0, index).trim();
+    const value = trimmed.slice(index + 1).trim();
+    if (!process.env[key]) process.env[key] = value;
+  }
+}

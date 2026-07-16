@@ -72,7 +72,7 @@ export default function Home() {
   }
 
   function beginCreate() {
-    if (!catalog.entries.length) { setError('O catálogo oficial está indisponível. Sincronize o Trello antes de criar uma ficha.'); return; }
+    if (!catalog.entries.length) { setError('O catálogo oficial está indisponível. Sincronize o Supabase antes de criar uma ficha.'); return; }
     setDraft(emptyCharacter());
     setView('wizard');
   }

@@ -1,13 +1,9 @@
 import fs from 'node:fs';
 
+import { closePool } from '../lib/postgres.js';
+import { ensureCatalogCategories, upsertCatalogEntry } from '../lib/catalogStore.js';
+
 loadDotEnv();
-
-const API_KEY = process.env.TRELLO_API_KEY || '';
-const TOKEN = process.env.TRELLO_TOKEN || '';
-const BOARD_ID = process.env.TRELLO_BOARD_ID || '';
-const BOARD_NAME = process.env.TRELLO_BOARD_NAME || 'GERENCIAMENTO RPG';
-
-if (!API_KEY || !TOKEN) throw new Error('Configure TRELLO_API_KEY e TRELLO_TOKEN no .env.');
 
 const attributes = ['Força', 'Destreza', 'Constituição', 'Inteligência', 'Carisma', 'Fé'];
 const skills = [
@@ -19,33 +15,49 @@ const skills = [
   ['Furtividade', 'floor((Destreza × 70%) + (Inteligência × 30%))', 'Destreza 70%; Inteligência 30%.'],
 ];
 
-const boardId = await resolveBoard();
-const attributesListId = await ensureList(boardId, 'Atributos');
-const skillsListId = await ensureList(boardId, 'Perícias');
-const systemListId = await ensureList(boardId, 'Sistema');
+try {
+  await ensureCatalogCategories();
 
-for (const name of attributes) {
-  await upsertCard(attributesListId, name, attributeDescription(name));
+  for (const name of attributes) {
+    await upsertCatalogEntry('Atributos', {
+      name,
+      description: attributeDescription(name),
+      labels: [{ id: 'label_atributo', name: 'Atributo', color: 'blue' }],
+      metadata: { schemaVersion: 1, type: 'attribute' },
+    });
+  }
+
+  for (const [name, formula, weights] of skills) {
+    await upsertCatalogEntry('Perícias', {
+      name,
+      description: skillDescription(name, formula, weights),
+      labels: [{ id: 'label_pericia', name: 'Perícia', color: 'green' }],
+      metadata: { schemaVersion: 1, type: 'skill' },
+    });
+  }
+
+  const systemCards = {
+    'Atributos e Progressao': attributesSystemDescription(),
+    'Pericias e Formulas': skillsSystemDescription(),
+    'Experiencia e Nivel': experienceDescription(),
+    'Humanidade e Divindade': humanityDescription(),
+    'Classe de Armadura e Combate': armorClassDescription(),
+    Sorte: luckDescription(),
+  };
+
+  for (const [name, description] of Object.entries(systemCards)) {
+    await upsertCatalogEntry('Sistema', {
+      name,
+      description,
+      labels: [{ id: 'label_sistema', name: 'Sistema', color: 'purple' }],
+      metadata: { schemaVersion: 1, type: 'system' },
+    });
+  }
+
+  console.log(`Sincronização concluída: ${attributes.length} atributos, ${skills.length} perícias e ${Object.keys(systemCards).length} regras.`);
+} finally {
+  await closePool();
 }
-
-for (const [name, formula, weights] of skills) {
-  await upsertCard(skillsListId, name, skillDescription(name, formula, weights));
-}
-
-const systemCards = {
-  'Atributos e Progressao': attributesSystemDescription(),
-  'Pericias e Formulas': skillsSystemDescription(),
-  'Experiencia e Nivel': experienceDescription(),
-  'Humanidade e Divindade': humanityDescription(),
-  'Classe de Armadura e Combate': armorClassDescription(),
-  Sorte: luckDescription(),
-};
-
-for (const [name, description] of Object.entries(systemCards)) {
-  await upsertCard(systemListId, name, description);
-}
-
-console.log(`Sincronização concluída: ${attributes.length} atributos, ${skills.length} perícias e ${Object.keys(systemCards).length} regras.`);
 
 function attributeDescription(name) {
   return `# ${name}
@@ -159,7 +171,7 @@ Todo personagem participante recebe +1 XP de Classe. O mestre soma os critérios
 | Completar objetivo pessoal | +1 a +2 |
 | Destaque da sessão | +1 |
 
-Custos: para atingir os níveis 2–5 são necessários 20 XP; para atingir os níveis 6–10 são necessários 40 XP; Excelência após o nível 10 custa 75 XP e exige o requisito da classe.
+Custos: para atingir os níveis 2-5 são necessários 20 XP; para atingir os níveis 6-10 são necessários 40 XP; Excelência após o nível 10 custa 75 XP e exige o requisito da classe.
 
 ## Experiência por Área e Combate
 
@@ -210,13 +222,13 @@ Todo personagem possui Humanidade e Divindade entre 0 e 100. Ao gastar Humanidad
 
 | Humanidade | Estado | CD | Efeitos principais |
 | --- | --- | ---: | --- |
-| 100–81 | Humanidade plena | — | Sem influência suficiente para exigir teste. |
-| 80–51 | Humanidade estável | 17 | Transformações mínimas; Clérigo e Paladino usam CD 15 pela regra específica da classe. |
-| 50–26 | Influência divina | 18 | Dano de Magia Divina recebe +Fé. Acerto divino = floor(Divindade ÷ 15), máximo +5. |
-| 25–11 | Domínio divino severo | 18 | Falha pode causar perda da ação, controle temporário e 1d20 de dano. |
-| 10–2 | Humanidade crítica | 19 | Apenas Milagres reduzem Humanidade; bônus continuam escalando. |
+| 100-81 | Humanidade plena | - | Sem influência suficiente para exigir teste. |
+| 80-51 | Humanidade estável | 17 | Transformações mínimas; Clérigo e Paladino usam CD 15 pela regra específica da classe. |
+| 50-26 | Influência divina | 18 | Dano de Magia Divina recebe +Fé. Acerto divino = floor(Divindade ÷ 15), máximo +5. |
+| 25-11 | Domínio divino severo | 18 | Falha pode causar perda da ação, controle temporário e 1d20 de dano. |
+| 10-2 | Humanidade crítica | 19 | Apenas Milagres reduzem Humanidade; bônus continuam escalando. |
 | 1 | Estado de Avatar | Especial | Teste de controle a cada turno; falha leva a Humanidade 0. |
-| 0 | Manifestação Divina Total | — | Personagem injogável; só recebe dano de Magia Divina e perde 1d20 de vida por turno. |
+| 0 | Manifestação Divina Total | - | Personagem injogável; só recebe dano de Magia Divina e perde 1d20 de vida por turno. |
 
 Retorno da Manifestação ocorre apenas pelas condições descritas no sistema: morrer e passar nos testes de morte, ou outro Clérigo selar os poderes divinos.`;
 }
@@ -228,7 +240,7 @@ function armorClassDescription() {
 
 **Classe de Armadura:** CA = 10 + Defesa
 
-O resultado da Defesa é sempre arredondado para baixo. Equipamentos, habilidades e efeitos podem aplicar modificadores adicionais quando estiverem explicitamente descritos em seus cartões.`;
+O resultado da Defesa é sempre arredondado para baixo. Equipamentos, habilidades e efeitos podem aplicar modificadores adicionais quando estiverem explicitamente descritos em seus cadastros.`;
 }
 
 function luckDescription() {
@@ -245,53 +257,6 @@ function luckDescription() {
 - Sorte 1: repete uma rolagem qualquer uma vez por sessão; o segundo resultado é obrigatório.
 - Sorte 2: adiciona +1 a uma rolagem, depois de rolar e antes da confirmação, uma vez por sessão.
 - Sorte 3: repete o dano de um único ataque uma vez por sessão; o segundo resultado é obrigatório.`;
-}
-
-async function resolveBoard() {
-  if (BOARD_ID) return BOARD_ID;
-  const boards = await trello('GET', '/1/members/me/boards', { fields: 'name,closed' });
-  const board = boards.find((item) => item.name === BOARD_NAME && !item.closed);
-  if (!board) throw new Error(`Quadro não encontrado: ${BOARD_NAME}`);
-  return board.id;
-}
-
-async function ensureList(idBoard, name) {
-  const lists = await trello('GET', `/1/boards/${idBoard}/lists`, { fields: 'name,closed' });
-  const existing = lists.find((item) => item.name === name && !item.closed);
-  if (existing) return existing.id;
-  return (await trello('POST', '/1/lists', { idBoard, name })).id;
-}
-
-async function upsertCard(idList, name, desc) {
-  const cards = await trello('GET', `/1/lists/${idList}/cards`, { fields: 'name,closed', limit: 1000 });
-  const matching = cards.filter((card) => normalize(card.name) === normalize(name) && !card.closed);
-  if (matching.length) {
-    await trello('PUT', `/1/cards/${matching[0].id}`, { name, desc });
-    for (const duplicate of matching.slice(1)) await trello('PUT', `/1/cards/${duplicate.id}`, { closed: true });
-    return;
-  }
-  await trello('POST', '/1/cards', { idList, name, desc });
-}
-
-async function trello(method, path, payload = {}) {
-  const url = new URL(path, 'https://api.trello.com');
-  url.searchParams.set('key', API_KEY);
-  url.searchParams.set('token', TOKEN);
-  const options = { method };
-  if (method === 'GET' || method === 'DELETE') {
-    for (const [key, value] of Object.entries(payload)) url.searchParams.set(key, String(value));
-  } else {
-    options.headers = { 'Content-Type': 'application/json; charset=utf-8' };
-    options.body = JSON.stringify(payload);
-  }
-  const response = await fetch(url, options);
-  const text = await response.text();
-  if (!response.ok) throw new Error(`Trello respondeu ${response.status}: ${text}`);
-  return text ? JSON.parse(text) : null;
-}
-
-function normalize(value) {
-  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
 function loadDotEnv() {

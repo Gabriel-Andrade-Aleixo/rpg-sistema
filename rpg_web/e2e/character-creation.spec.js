@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('cria, confirma no Trello e exibe uma nova ficha', async ({ page, request }) => {
+test('cria, confirma no backend e exibe uma nova ficha', async ({ page, request }) => {
   const name = `E2E Persistência ${Date.now()}`;
   let characterId = '';
 
