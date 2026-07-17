@@ -66,10 +66,20 @@ class _AuthScreenState extends State<AuthScreen> {
         await widget.onDone();
       }
     } catch (error) {
-      setState(() => _message = 'Não foi possível continuar: $error');
+      setState(() => _message = _friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _friendlyError(Object error) {
+    final text = error.toString();
+    if (text.contains('Failed host lookup') ||
+        text.contains('SocketException') ||
+        text.contains('Network is unreachable')) {
+      return 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+    }
+    return 'Não foi possível continuar: $error';
   }
 
   @override
