@@ -1810,23 +1810,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
               attribute,
               _character.modifiers,
             );
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: StatBreakdownCard(
-                    label: attribute.label,
-                    base: breakdown.base,
-                    total: breakdown.total,
-                    modifiers: breakdown.modifiers,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Rolar ${attribute.label}',
-                  onPressed: () => _rollAttribute(attribute, breakdown),
-                  icon: const Icon(Icons.casino_outlined),
-                ),
-              ],
+            return StatBreakdownCard(
+              label: attribute.label,
+              base: breakdown.base,
+              total: breakdown.total,
+              modifiers: breakdown.modifiers,
+              onRoll: () => _rollAttribute(attribute, breakdown),
             );
           },
         ),
@@ -1941,30 +1930,26 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Defesa'),
-                trailing: Text(
-                  '$defense',
-                  style: Theme.of(context).textTheme.headlineSmall,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 380;
+            final width = compact
+                ? constraints.maxWidth
+                : (constraints.maxWidth - 10) / 2;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                SizedBox(
+                  width: width,
+                  child: _defenseMetric('Defesa', defense),
                 ),
-              ),
-            ),
-            Expanded(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('CA'),
-                trailing: Text(
-                  '$armorClass',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-            ),
-          ],
+                SizedBox(width: width, child: _defenseMetric('CA', armorClass)),
+              ],
+            );
+          },
         ),
+        const SizedBox(height: 10),
         Text('$formulaText\nCA = 10 + Defesa + bônus direto de CA'),
         if (equipment.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -1982,6 +1967,29 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _defenseMetric(String label, int value) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Text('$value', style: Theme.of(context).textTheme.headlineSmall),
+        ],
+      ),
     );
   }
 

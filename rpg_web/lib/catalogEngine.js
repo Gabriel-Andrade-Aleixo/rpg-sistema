@@ -7,6 +7,11 @@ const legacyNames = {
   spectral_archer: 'arqueiro espectral', tactical_maestro: 'maestro tatico', cleric: 'clerigo',
   paladin: 'paladino', rogue: 'ladino', ranger: 'ranger', bard: 'bardo',
   fighter: 'lutador',
+  '6a3de251945d24a05e0664a7': 'thri-kreen',
+  '6a3de252b4339be40afe3fd4': 'vedalken',
+  '6a3de25d749c699cb406f356': 'arqueiro espectral',
+  '6a3de25d4cfa3fe29871110a': 'maestro tatico',
+  '6a3de276252b8d934abd4853': 'espada curta',
 };
 
 const attributeAliases = {
@@ -41,7 +46,12 @@ export function catalogGroups(catalog) {
 }
 
 export function findEntry(catalog, id) {
-  return (catalog?.entries || []).find((entry) => entry.id === id) || null;
+  if (!id) return null;
+  const entries = catalog?.entries || [];
+  const direct = entries.find((entry) => entry.id === id);
+  if (direct) return direct;
+  const resolvedId = resolveLegacyId(id, entries);
+  return entries.find((entry) => entry.id === resolvedId) || null;
 }
 
 export function migrateCharacter(raw, catalog) {
@@ -93,9 +103,15 @@ export function migrateCharacter(raw, catalog) {
 }
 
 function resolveLegacyId(id, entries) {
+  if (!id) return '';
   if (entries.some((entry) => entry.id === id)) return id;
-  const wanted = legacyNames[id] || normalize(id);
-  return entries.find((entry) => normalize(entry.name) === wanted)?.id || id || '';
+  const normalizedId = normalize(id);
+  const wanted = normalize(legacyNames[id] || legacyNames[normalizedId] || id);
+  return entries.find((entry) => normalize(parseRuleMetadata(entry)?.id) === wanted)?.id
+    || entries.find((entry) => normalize(parseRuleMetadata(entry)?.id) === normalizedId)?.id
+    || entries.find((entry) => normalize(entry.name) === wanted)?.id
+    || id
+    || '';
 }
 
 export function parseRace(entry, variantId = '') {
@@ -325,6 +341,8 @@ export function recalculateCharacter(character, catalog) {
   const currentMana = nextResourceCurrent(character.currentMana, character.maxMana, maximumMana);
   return {
     ...character,
+    raceId: raceEntry.id,
+    classId: classEntry.id,
     modifiers,
     proficiencies: unique([...race.proficiencies, ...characterClass.proficiencies, ...(character.manualProficiencies || [])]),
     abilities: unique([...race.abilities, ...characterClass.unlocks.filter((item) => item.level <= character.level).map((item) => item.name), ...(character.manualAbilities || [])]),

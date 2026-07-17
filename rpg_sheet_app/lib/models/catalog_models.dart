@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class CatalogLabel {
   const CatalogLabel({required this.id, required this.name, this.color = ''});
 
@@ -57,6 +59,21 @@ class CatalogEntry {
     r'<!-- RPG_RULES_JSON_START -->[\s\S]*?<!-- RPG_RULES_JSON_END -->',
   ).hasMatch(description);
 
+  String get ruleMetadataId {
+    final match = RegExp(
+      r'<!-- RPG_RULES_JSON_START -->([\s\S]*?)<!-- RPG_RULES_JSON_END -->',
+    ).firstMatch(description);
+    final raw = match?.group(1)?.trim();
+    if (raw == null || raw.isEmpty) return '';
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return decoded['id']?.toString() ?? '';
+    } catch (_) {
+      return '';
+    }
+    return '';
+  }
+
   factory CatalogEntry.fromJson(Map<String, dynamic> json) => CatalogEntry(
     id: json['id']?.toString() ?? '',
     name: json['name']?.toString() ?? '',
@@ -106,8 +123,19 @@ class OfficialCatalog {
   List<CatalogEntry> get skills => entriesFor('pericias');
 
   CatalogEntry? findById(String id) {
+    if (id.trim().isEmpty) return null;
     for (final entry in entries) {
       if (entry.id == id) return entry;
+    }
+    final normalizedId = _normalize(id);
+    final alias = _legacyEntryAliases[normalizedId];
+    final wanted = {normalizedId, if (alias != null) _normalize(alias)};
+    for (final entry in entries) {
+      if (wanted.contains(_normalize(entry.id)) ||
+          wanted.contains(entry.normalizedName) ||
+          wanted.contains(_normalize(entry.ruleMetadataId))) {
+        return entry;
+      }
     }
     return null;
   }
@@ -127,6 +155,36 @@ class OfficialCatalog {
 }
 
 String normalizeCatalogText(String value) => _normalize(value);
+
+const _legacyEntryAliases = <String, String>{
+  'human': 'humano',
+  'elf': 'elfo',
+  'dwarf': 'anao',
+  'thri_kreen': 'thri-kreen',
+  'vedalken': 'vedalken',
+  'lizardfolk': 'lizardfolk',
+  'genasi': 'genasi',
+  'goliath': 'goliath',
+  'orc': 'orc',
+  'minotaur': 'minotauro',
+  'bugbear': 'bugbear',
+  'firbolg': 'firbolg',
+  'barbarian': 'barbaro',
+  'mage': 'mago',
+  'spectral_archer': 'arqueiro espectral',
+  'tactical_maestro': 'maestro tatico',
+  'cleric': 'clerigo',
+  'paladin': 'paladino',
+  'rogue': 'ladino',
+  'ranger': 'ranger',
+  'bard': 'bardo',
+  'fighter': 'lutador',
+  '6a3de251945d24a05e0664a7': 'thri-kreen',
+  '6a3de252b4339be40afe3fd4': 'vedalken',
+  '6a3de25d749c699cb406f356': 'arqueiro espectral',
+  '6a3de25d4cfa3fe29871110a': 'maestro tatico',
+  '6a3de276252b8d934abd4853': 'espada curta',
+};
 
 String _normalize(String value) {
   const accented = 'áàãâäéèêëíìîïóòõôöúùûüç';

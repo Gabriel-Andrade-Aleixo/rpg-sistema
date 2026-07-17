@@ -175,6 +175,41 @@ void main() {
     expect(dexterityBonus, 2);
   });
 
+  test('IDs antigos do Trello resolvem Zenitti e calculam CA oficial 14', () {
+    final catalog = OfficialCatalog(entries: [race, characterClass]);
+    final recalculated = CharacterRecalculationService().recalculate(
+      Character(
+        id: 'zenitti',
+        name: 'Zenitti',
+        playerName: 'Aleixo',
+        raceId: '6a3de251945d24a05e0664a7',
+        raceVariant: 'four_arms',
+        classId: '6a3de25d749c699cb406f356',
+        level: 1,
+        attributes: const {
+          AttributeId.strength: 0,
+          AttributeId.dexterity: 2,
+          AttributeId.constitution: 4,
+          AttributeId.intelligence: 4,
+          AttributeId.charisma: 0,
+          AttributeId.faith: 0,
+        },
+      ),
+      catalog,
+    );
+    final parsedClass = parser.parseClass(characterClass);
+
+    expect(recalculated.raceId, race.id);
+    expect(recalculated.classId, characterClass.id);
+    expect(
+      const CombatCalculator().armorClass(
+        recalculated,
+        parsedClass.defenseFormula,
+      ),
+      14,
+    );
+  });
+
   test('armadura equipada aumenta Defesa e CA', () {
     final armor = CatalogEntry(
       id: 'leather',

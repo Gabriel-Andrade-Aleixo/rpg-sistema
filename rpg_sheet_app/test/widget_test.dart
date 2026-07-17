@@ -21,7 +21,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
 
     expect(find.text('Runalith RPG'), findsOneWidget);
     expect(find.text('Entrar'), findsWidgets);

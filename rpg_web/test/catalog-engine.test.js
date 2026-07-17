@@ -174,6 +174,37 @@ test('Thri-kreen soma Destreza racial e mantém bônus das variantes nas rolagen
   assert.equal(attributeBreakdown(recalculated, 'dexterity').total, 2);
 });
 
+test('IDs antigos do Trello resolvem a ficha Zenitti e calculam CA oficial 14', () => {
+  const race = {
+    id: 'race-current', name: 'Thri-kreen', category: 'Racas',
+    description: '<!-- RPG_RULES_JSON_START -->\n{"type":"race","id":"thri_kreen","attributeBonuses":{"dexterity":1},"variants":[{"id":"four_arms","name":"Quatro braços","skillRollBonuses":{"furtividade":1}}]}\n<!-- RPG_RULES_JSON_END -->',
+  };
+  const archer = {
+    id: 'class-current', name: 'Arqueiro Espectral', category: 'Classes',
+    description: `<!-- RPG_RULES_JSON_START -->\n${JSON.stringify({
+      type: 'class',
+      id: 'spectral_archer',
+      defense: { base: 0, terms: { constitution: .4, dexterity: .3, intelligence: .3 } },
+      hp: hp(formula(10, { constitution: 2, dexterity: 2 }), formula(5, { constitution: 1 }), { die: 8, ...formula(0, { constitution: 1 }) }, { die: 4, ...formula(4, { constitution: 1 }) }),
+      mana: formula(15, { intelligence: 1, dexterity: 2 }),
+      attributeProgression: [progression(1, 3, { dexterity: 1 })],
+    })}\n<!-- RPG_RULES_JSON_END -->`,
+  };
+  const character = recalculateCharacter({
+    ...emptyCharacter(),
+    name: 'Zenitti',
+    raceId: '6a3de251945d24a05e0664a7',
+    raceVariant: 'four_arms',
+    classId: '6a3de25d749c699cb406f356',
+    level: 1,
+    attributes: { ...emptyCharacter().attributes, dexterity: 2, constitution: 4, intelligence: 4 },
+  }, { entries: [race, archer] });
+  assert.equal(character.raceId, 'race-current');
+  assert.equal(character.classId, 'class-current');
+  assert.equal(attributeBreakdown(character, 'dexterity').total, 4);
+  assert.equal(armorClassValue(character, archer), 14);
+});
+
 test('armadura equipada aumenta Defesa e CA e desequipada remove o bônus', () => {
   const race = { id: 'race', name: 'Raça', category: 'Racas', description: '<!-- RPG_RULES_JSON_START -->\n{"type":"race"}\n<!-- RPG_RULES_JSON_END -->' };
   const archer = entryFor(classRules.find((item) => item.id === 'spectral_archer'));

@@ -24,18 +24,26 @@ class CharacterRecalculationService {
     final raceEntry = catalog.findById(character.raceId);
     final classEntry = catalog.findById(character.classId);
     if (raceEntry == null || classEntry == null) return character;
-    final race = _parser.parseRace(raceEntry, character.raceVariant);
+    final normalizedCharacter = character.copyWith(
+      raceId: raceEntry.id,
+      classId: classEntry.id,
+    );
+    final race = _parser.parseRace(raceEntry, normalizedCharacter.raceVariant);
     final characterClass = _parser.parseClass(classEntry);
     final modifiers = [
       ...race.modifiers,
       ...characterClass.modifiers,
-      ..._classProgressionModifiers(character, classEntry, characterClass),
-      ...character.permanentAttributeBonuses.entries
+      ..._classProgressionModifiers(
+        normalizedCharacter,
+        classEntry,
+        characterClass,
+      ),
+      ...normalizedCharacter.permanentAttributeBonuses.entries
           .where((entry) => entry.value != 0)
           .map(
             (entry) => Modifier(
               id: 'permanent_${entry.key.name}',
-              sourceId: character.id,
+              sourceId: normalizedCharacter.id,
               sourceName: 'Progressão permanente',
               sourceType: 'experience',
               targetType: 'attribute',
@@ -44,25 +52,25 @@ class CharacterRecalculationService {
               description: 'Bônus permanente obtido por conversão de XP.',
             ),
           ),
-      ..._equipment.modifiers(character, catalog),
+      ..._equipment.modifiers(normalizedCharacter, catalog),
     ];
     final maximumMana = characterClass.manaFormula == null
-        ? character.maxMana
+        ? normalizedCharacter.maxMana
         : _formulas.evaluate(
             characterClass.manaFormula,
-            character,
+            normalizedCharacter,
             modifiers: modifiers,
           );
     final currentMana = _nextCurrent(
-      character.currentMana,
-      character.maxMana,
+      normalizedCharacter.currentMana,
+      normalizedCharacter.maxMana,
       maximumMana,
     );
-    final resources = Map<String, int>.of(character.resources);
+    final resources = Map<String, int>.of(normalizedCharacter.resources);
     for (final resource in characterClass.resourceRules) {
       final maximum = _formulas.evaluate(
         resource.maximum,
-        character,
+        normalizedCharacter,
         modifiers: modifiers,
       );
       final maxKey = '${resource.id}Max';
@@ -74,11 +82,22 @@ class CharacterRecalculationService {
       );
       resources[maxKey] = maximum;
     }
-    return character.copyWith(
+    return normalizedCharacter.copyWith(
       modifiers: modifiers,
-      proficiencies: _proficiencies.calculate(character, race, characterClass),
-      abilities: _abilities.calculate(character, race, characterClass),
-      currentHp: character.currentHp.clamp(0, character.maxHp),
+      proficiencies: _proficiencies.calculate(
+        normalizedCharacter,
+        race,
+        characterClass,
+      ),
+      abilities: _abilities.calculate(
+        normalizedCharacter,
+        race,
+        characterClass,
+      ),
+      currentHp: normalizedCharacter.currentHp.clamp(
+        0,
+        normalizedCharacter.maxHp,
+      ),
       maxMana: maximumMana,
       currentMana: currentMana,
       resources: resources,
@@ -108,7 +127,8 @@ class CharacterRecalculationService {
             targetType: 'attribute',
             targetId: grant.key,
             value: grant.value * attained,
-            description: 'Progressão automática definida no cadastro da classe.',
+            description:
+                'Progressão automática definida no cadastro da classe.',
           ),
         );
       }

@@ -280,6 +280,7 @@ export default function Home() {
 
         {(view === 'sheet' || view === 'wizard') && !selected && <button className="mobileCreateButton" aria-label="Criar personagem" title="Criar personagem" onClick={beginCreate} disabled={!catalog.entries.length}><Plus aria-hidden="true" /></button>}
 
+        {loading && <LoadingOverlay label="Sincronizando fichas e catálogo..." />}
         {saving && <div className="savingBar">Salvando ficha...</div>}
         {view === 'catalog' && <CatalogView catalog={catalog} />}
         {view === 'admin' && session.user?.role === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} />}
@@ -290,6 +291,10 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+function LoadingOverlay({ label }) {
+  return <div className="loadingOverlay" role="status" aria-live="polite"><span /><strong>{label}</strong></div>;
 }
 
 function AuthView({ loading, error, onAuth }) {

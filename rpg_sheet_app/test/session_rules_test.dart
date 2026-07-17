@@ -91,7 +91,10 @@ void main() {
       secondDie: 4,
     );
     expect(damage.total, 7);
-    expect(result.character.actionHistory.first.result, contains('2d4 = 3 + 4 = 7'));
+    expect(
+      result.character.actionHistory.first.result,
+      contains('2d4 = 3 + 4 = 7'),
+    );
     expect(result.character.spells.first.successfulUses, 1);
   });
 

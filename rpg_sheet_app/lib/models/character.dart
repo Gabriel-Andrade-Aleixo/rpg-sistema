@@ -336,7 +336,8 @@ class Character {
           ? 'private'
           : 'public',
       isPrivate:
-          json['isPrivate'] == true || json['visibility']?.toString() == 'private',
+          json['isPrivate'] == true ||
+          json['visibility']?.toString() == 'private',
       level: (json['level'] as num?)?.toInt() ?? 1,
       background: json['background']?.toString() ?? '',
       lore: json['lore']?.toString() ?? '',

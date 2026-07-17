@@ -9,19 +9,32 @@ class StatBreakdownCard extends StatelessWidget {
     required this.base,
     required this.total,
     this.modifiers = const [],
+    this.onRoll,
   });
 
   final String label;
   final int base;
   final int total;
   final List<Modifier> modifiers;
+  final VoidCallback? onRoll;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ExpansionTile(
         title: Text(label),
-        trailing: Text('$total', style: Theme.of(context).textTheme.titleLarge),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onRoll != null)
+              IconButton(
+                tooltip: 'Rolar $label',
+                onPressed: onRoll,
+                icon: const Icon(Icons.casino_outlined),
+              ),
+            Text('$total', style: Theme.of(context).textTheme.titleLarge),
+          ],
+        ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
           _row('Base', base),
