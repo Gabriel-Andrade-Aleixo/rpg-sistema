@@ -36,7 +36,7 @@ async function expectVisibleCanvas(page) {
     return count;
   });
   expect(visiblePixels).toBeGreaterThan(500);
-  await expect(page.getByRole('button', { name: 'Concluir' })).toBeEnabled({ timeout: 5000 });
+  await expect(page.locator('.rollResultBlock')).toBeVisible({ timeout: 5000 });
 }
 
 test('modo mestre e dado 3D permanecem claros no desktop e mobile', async ({ page }, testInfo) => {
@@ -46,10 +46,10 @@ test('modo mestre e dado 3D permanecem claros no desktop e mobile', async ({ pag
   await expect(page.getByText('Armadura de Couro')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('mestre-desktop.png'), fullPage: true });
-  await page.locator('.dieButton').click();
+  await page.getByRole('button', { name: 'Dados' }).click();
+  await page.getByRole('button', { name: 'Rolar d20' }).click();
   await expectVisibleCanvas(page);
   await page.screenshot({ path: testInfo.outputPath('dado-desktop.png') });
-  await page.getByRole('button', { name: 'Concluir' }).click();
 
   await prepare(page, { width: 390, height: 844 });
   await page.getByRole('button', { name: 'Mestre' }).click();
@@ -57,7 +57,8 @@ test('modo mestre e dado 3D permanecem claros no desktop e mobile', async ({ pag
   await expect(page.getByText('Flecha Espectral')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('mestre-mobile.png'), fullPage: true });
-  await page.locator('.dieButton').click();
+  await page.getByRole('button', { name: 'Dados' }).click();
+  await page.getByRole('button', { name: 'Rolar d20' }).click();
   await expectVisibleCanvas(page);
   await page.screenshot({ path: testInfo.outputPath('dado-mobile.png') });
 });

@@ -505,7 +505,7 @@ export function prepareCharacterForStorage(raw) {
   character.notes = compactStrings(character.notes, 100, 1000);
   character.manualProficiencies = compactStrings(character.manualProficiencies, 200, 240);
   character.manualAbilities = compactStrings(character.manualAbilities, 200, 400);
-  character.rollHistory = compactHistory(character.rollHistory, 100);
+  character.rollHistory = compactHistory(character.rollHistory, 30);
   character.levelHistory = compactHistory(character.levelHistory, 100);
   character.classXpHistory = compactHistory(character.classXpHistory, 100);
   character.experienceHistory = compactHistory(character.experienceHistory, 200);

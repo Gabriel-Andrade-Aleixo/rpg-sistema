@@ -51,6 +51,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .brandBlock { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .brandBlock h1 { margin: 0; font-size: 22px; }
 .brandBlock span, .muted { color: var(--muted); }
+.compactBrand { margin-bottom: 0; }
+.brandLogo { flex: 0 0 54px; width: 54px; height: 54px; object-fit: cover; border: 1px solid var(--gold); border-radius: 8px; box-shadow: var(--shadow); }
 .sigil, .emptyIcon { display: grid; place-items: center; flex: 0 0 52px; width: 52px; height: 52px; border: 1px solid var(--gold); border-radius: 8px; background: var(--accent); color: #fff; font-weight: 900; box-shadow: var(--shadow); }
 
 .primaryButton, .ghostButton, .selectedAction, .quickActions button, .combatActions button, .filterRow button, .mainNav button, .cardActions button, .segmented button, .quantityControl button, .wizardFooter button, .choiceActions button {
@@ -67,7 +69,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .compactButton { min-height: 32px; padding: 6px 10px; }
 .sidebar > .primaryButton { width: 100%; }
 
-.mainNav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 14px 0; }
+.mainNav { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 5px; margin: 14px 0; }
 .mainNav button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 7px 4px; border-color: var(--line); background: transparent; color: var(--muted); font-size: 12px; }
 .mainNav svg { width: 16px; height: 16px; }
 .mainNav button.active { background: var(--surface-3); color: var(--ink); border-color: var(--gold); }
@@ -128,6 +130,7 @@ textarea { resize: vertical; }
 .spanTwo { grid-column: 1 / -1; }
 .emptyState { display: grid; place-items: center; min-height: 430px; padding: 32px; text-align: center; }
 .emptyState p { max-width: 500px; color: var(--muted); }
+.emptyIconImage { width: 84px; height: 84px; border: 1px solid var(--gold); border-radius: 8px; object-fit: cover; box-shadow: var(--shadow); }
 
 .sheetGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: 100%; max-width: 1280px; min-width: 0; padding-bottom: 72px; }
 .sheetGrid > *, .panel, .sheetHeader { min-width: 0; max-width: 100%; }
@@ -294,6 +297,32 @@ textarea { resize: vertical; }
 .historyList article > strong { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 7px; background: var(--surface-3); color: var(--gold); font-size: 19px; }
 .historyList article div { display: grid; gap: 2px; }
 .historyList span, .historyList time { color: var(--muted); font-size: 12px; }
+.dicePage { display: grid; gap: 14px; max-width: 1320px; }
+.diceHero { display: flex; align-items: stretch; justify-content: space-between; gap: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 86%, var(--primary-500)), var(--surface)); box-shadow: var(--shadow); }
+.diceHero h3 { margin: 4px 0 6px; font-size: clamp(25px, 4vw, 38px); }
+.diceHero p { max-width: 680px; margin: 0; color: var(--muted); line-height: 1.55; }
+.diceHeroStats { display: grid; align-content: center; min-width: 190px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--bg) 42%, transparent); }
+.diceHeroStats span, .diceHeroStats small { color: var(--muted); }
+.diceHeroStats strong { color: var(--gold); font-size: 42px; line-height: 1; }
+.diceWorkbench { display: grid; grid-template-columns: minmax(230px, 300px) minmax(360px, 1fr) minmax(300px, 390px); gap: 12px; align-items: start; }
+.diceControlPanel, .diceStagePanel, .diceHistoryPanel { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); padding: 14px; }
+.diceControlPanel { display: grid; gap: 12px; }
+.dicePicker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.dicePicker button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--ink); font-weight: 800; }
+.dicePicker button.active { border-color: var(--gold); background: var(--accent); color: #fff; }
+.rollCallButton { width: 100%; min-height: 48px; }
+.rollResultBlock { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--gold); border-radius: 8px; background: var(--surface-2); }
+.rollResultBlock strong { color: var(--gold); font-size: 36px; line-height: 1; }
+.rollResultBlock span, .rollResultBlock small { color: var(--muted); }
+.diceStagePanel { padding: 0; overflow: hidden; }
+.diceStagePanel .diceStage { height: 440px; border: 0; background: radial-gradient(circle at 50% 12%, color-mix(in srgb, var(--primary-500) 28%, transparent), transparent 42%), var(--surface-2); }
+.diceIdle { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 440px; color: var(--muted); }
+.diceIdle svg { width: 44px; height: 44px; color: var(--gold); }
+.diceIdle strong { color: var(--ink); font-size: 48px; }
+.diceHistoryPanel { max-height: 560px; overflow: auto; }
+.diceHistoryList article { grid-template-columns: 48px minmax(0, 1fr) 34px; }
+.diceHistoryList article button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--ink); }
+.diceHistoryList article button svg { width: 16px; height: 16px; }
 .xpColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .xpBlock { display: grid; align-content: start; gap: 9px; padding: 13px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); }
 .xpBlock h4 { margin: 0 0 3px; }
@@ -455,6 +484,8 @@ textarea { resize: vertical; }
   .appShell { grid-template-columns: 1fr; }
   .sidebar { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
   .characterList { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .diceWorkbench { grid-template-columns: minmax(0, 1fr); }
+  .diceStagePanel { order: -1; }
   .wizardLayout { grid-template-columns: 1fr; }
   .wizardSteps { display: flex; overflow-x: auto; padding-bottom: 6px; }
   .wizardSteps button { flex: 0 0 auto; }
@@ -477,6 +508,10 @@ textarea { resize: vertical; }
   .mobileCharacterPicker { display: grid; gap: 5px; width: min(100%, 340px); margin-top: 12px; }
   .mobileCharacterPicker span { color: var(--muted); font-size: 11px; }
   .topbar, .viewHeader { align-items: stretch; flex-direction: column; }
+  .diceHero { flex-direction: column; }
+  .diceHeroStats { min-width: 0; }
+  .diceStagePanel .diceStage, .diceIdle { height: 340px; min-height: 340px; }
+  .dicePicker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .chooserHeader { align-items: stretch; flex-direction: column; }
   .chooserHeader .primaryButton { width: 100%; }
   .topbarActions { justify-content: space-between; }

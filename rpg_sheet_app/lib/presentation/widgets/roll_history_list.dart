@@ -21,7 +21,7 @@ class RollHistoryList extends StatelessWidget {
             label: const Text('Limpar'),
           ),
         ),
-        for (final record in records.take(20))
+        for (final record in records.take(30))
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(child: Text('${record.finalResult}')),

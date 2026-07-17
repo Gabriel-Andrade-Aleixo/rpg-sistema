@@ -59,7 +59,7 @@ class _RpgSheetAppState extends State<RpgSheetApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Fichas de RPG',
+      title: 'Runalith RPG',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
       theme: AppTheme.light,

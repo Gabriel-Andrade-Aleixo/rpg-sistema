@@ -165,13 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(_reload);
   }
 
-  void _showDice() => showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (_) => const DiceRoller(),
-  );
-
   @override
   Widget build(BuildContext context) => FutureBuilder<_HomeData>(
     future: _future,
@@ -183,11 +176,6 @@ class _HomeScreenState extends State<HomeScreen> {
           titleSpacing: 16,
           title: const _BrandTitle(),
           actions: [
-            IconButton(
-              tooltip: 'Rolar dados',
-              icon: const Icon(Icons.casino_outlined),
-              onPressed: _showDice,
-            ),
             IconButton(
               tooltip: 'Sincronizar dados',
               icon: const Icon(Icons.sync),
@@ -213,7 +201,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? widget.session.email
                           : widget.session.displayName,
                     ),
-                    subtitle: Text(widget.session.isAdmin ? 'Mestre' : 'Jogador'),
+                    subtitle: Text(
+                      widget.session.isAdmin ? 'Mestre' : 'Jogador',
+                    ),
                   ),
                 ),
                 PopupMenuItem(
@@ -257,6 +247,11 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Fichas',
             ),
             NavigationDestination(
+              icon: Icon(Icons.casino_outlined),
+              selectedIcon: Icon(Icons.casino),
+              label: 'Dados',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.library_books_outlined),
               selectedIcon: Icon(Icons.library_books),
               label: 'Catálogo',
@@ -291,9 +286,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final data = snapshot.data!;
     if (_destination == 1) {
-      return CatalogScreen(catalog: data.catalog, embedded: true);
+      return const DiceRoller();
     }
     if (_destination == 2) {
+      return CatalogScreen(catalog: data.catalog, embedded: true);
+    }
+    if (_destination == 3) {
       if (!widget.session.isAdmin) {
         return const Center(
           child: Text('Apenas o Mestre pode gerenciar o catálogo oficial.'),
@@ -334,7 +332,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-        Expanded(child: data.characters.isEmpty ? _empty(data) : _characters(data)),
+        Expanded(
+          child: data.characters.isEmpty ? _empty(data) : _characters(data),
+        ),
       ],
     );
   }
@@ -347,22 +347,13 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                'd20',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(color: Colors.white),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/brand/runalith_icon.png',
+                width: 84,
+                height: 84,
+                fit: BoxFit.cover,
               ),
             ),
             const SizedBox(height: 20),
@@ -386,23 +377,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              ...data.publicCharacters.take(4).map(
-                (character) => ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: RpgImage(
-                      url: character.imageUrl,
-                      width: 46,
-                      height: 46,
-                      icon: Icons.person_outline,
+              ...data.publicCharacters
+                  .take(4)
+                  .map(
+                    (character) => ListTile(
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: RpgImage(
+                          url: character.imageUrl,
+                          width: 46,
+                          height: 46,
+                          icon: Icons.person_outline,
+                        ),
+                      ),
+                      title: Text(character.name),
+                      subtitle: Text(
+                        '${data.catalog.findById(character.raceId)?.name ?? 'Raça'} · ${data.catalog.findById(character.classId)?.name ?? 'Classe'} · Nível ${character.level}',
+                      ),
                     ),
                   ),
-                  title: Text(character.name),
-                  subtitle: Text(
-                    '${data.catalog.findById(character.raceId)?.name ?? 'Raça'} · ${data.catalog.findById(character.classId)?.name ?? 'Classe'} · Nível ${character.level}',
-                  ),
-                ),
-              ),
             ],
           ],
         ),
@@ -480,9 +473,14 @@ class _BrandTitle extends StatelessWidget {
           border: Border.all(color: Theme.of(context).colorScheme.secondary),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text(
-          '20',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(7),
+          child: Image.asset(
+            'assets/brand/runalith_icon.png',
+            width: 42,
+            height: 42,
+            fit: BoxFit.cover,
+          ),
         ),
       ),
       const SizedBox(width: 10),
@@ -492,13 +490,13 @@ class _BrandTitle extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'RPG Manager',
+              'Runalith RPG',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             Text(
-              'Fichas inteligentes',
+              'Fichas, grimório e dados vivos',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall,

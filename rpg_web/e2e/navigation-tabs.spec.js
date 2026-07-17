@@ -82,10 +82,11 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await page.screenshot({ path: testInfo.outputPath('grimorio-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  await page.locator('.dieButton').click();
+  await page.getByRole('button', { name: 'Dados' }).click();
+  await page.getByRole('button', { name: 'Rolar d20' }).click();
   await expect(page.locator('.diceStage canvas')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Concluir' })).toBeEnabled({ timeout: 5000 });
-  await page.getByRole('button', { name: 'Concluir' }).click();
+  await expect(page.locator('.rollResultBlock')).toBeVisible({ timeout: 5000 });
+  await page.getByRole('button', { name: 'Fichas' }).click();
 
   await page.getByRole('button', { name: 'Combate' }).click();
   await expect(page.getByText('Flecha Mágica e infusões')).toBeVisible();

@@ -53,7 +53,10 @@ class _AuthScreenState extends State<AuthScreen> {
               : 'Token de recuperação: $token';
         });
       } else if (_mode == 'reset') {
-        await widget.repository.resetPassword(_token.text.trim(), _password.text);
+        await widget.repository.resetPassword(
+          _token.text.trim(),
+          _password.text,
+        );
         setState(() {
           _mode = 'login';
           _message = 'Senha atualizada. Entre novamente.';
@@ -86,20 +89,13 @@ class _AuthScreenState extends State<AuthScreen> {
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            '20',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/brand/runalith_icon.png',
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -108,7 +104,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'RPG Manager',
+                                'Runalith RPG',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               Text(

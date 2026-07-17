@@ -23,7 +23,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('RPG Manager'), findsOneWidget);
+    expect(find.text('Runalith RPG'), findsOneWidget);
     expect(find.text('Entrar'), findsWidgets);
   });
 }

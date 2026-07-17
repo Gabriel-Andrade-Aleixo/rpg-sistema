@@ -71,7 +71,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
 
   Future<void> _persist(Character next) async {
     final compact = next.copyWith(
-      rollHistory: next.rollHistory.take(20).toList(),
+      rollHistory: next.rollHistory.take(30).toList(),
       experienceHistory: next.experienceHistory.take(20).toList(),
       classXpHistory: next.classXpHistory.take(20).toList(),
       humanityHistory: next.humanityHistory.take(20).toList(),
@@ -1787,7 +1787,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
     if (result == null) return;
     await _persist(
-      _character.copyWith(rollHistory: [result, ..._character.rollHistory]),
+      _character.copyWith(
+        rollHistory: [result, ..._character.rollHistory].take(30).toList(),
+      ),
     );
     if (mounted) {
       _message(
@@ -1833,9 +1835,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
 
   Widget _proficiencySection() {
     if (widget.catalog.skills.isEmpty) {
-      return const Text(
-        'Nenhuma perícia encontrada no catálogo oficial.',
-      );
+      return const Text('Nenhuma perícia encontrada no catálogo oficial.');
     }
     return Column(
       children: [
@@ -2451,7 +2451,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
     if (result != null) {
       await _persist(
-        _character.copyWith(rollHistory: [result, ..._character.rollHistory]),
+        _character.copyWith(
+          rollHistory: [result, ..._character.rollHistory].take(30).toList(),
+        ),
       );
     }
   }
@@ -2487,7 +2489,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
     if (result != null) {
       await _persist(
-        _character.copyWith(rollHistory: [result, ..._character.rollHistory]),
+        _character.copyWith(
+          rollHistory: [result, ..._character.rollHistory].take(30).toList(),
+        ),
       );
     }
   }
@@ -2502,7 +2506,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
     if (result != null) {
       await _persist(
-        _character.copyWith(rollHistory: [result, ..._character.rollHistory]),
+        _character.copyWith(
+          rollHistory: [result, ..._character.rollHistory].take(30).toList(),
+        ),
       );
     }
   }

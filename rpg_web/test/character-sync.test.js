@@ -13,10 +13,10 @@ test('compacta históricos e remove modificadores calculados', () => {
   const compact = compactCharacter({
     id: '1',
     modifiers: [{ id: 'derived' }],
-    rollHistory: Array.from({ length: 30 }, (_, index) => index),
+    rollHistory: Array.from({ length: 40 }, (_, index) => index),
     actionHistory: Array.from({ length: 40 }, (_, index) => index),
   });
   assert.equal('modifiers' in compact, false);
-  assert.equal(compact.rollHistory.length, 20);
+  assert.equal(compact.rollHistory.length, 30);
   assert.equal(compact.actionHistory.length, 30);
 });

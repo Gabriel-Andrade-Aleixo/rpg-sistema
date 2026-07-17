@@ -93,7 +93,15 @@ class _AnimatedDiceState extends State<AnimatedDice>
             width: 140,
             height: 140,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withValues(alpha: .92),
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primaryContainer,
+                ],
+              ),
               border: Border.all(
                 color: Theme.of(context).colorScheme.secondary,
                 width: 2,
@@ -107,28 +115,78 @@ class _AnimatedDiceState extends State<AnimatedDice>
                 ),
               ],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'd${widget.sides}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.secondary,
-                    fontWeight: FontWeight.w800,
+            child: CustomPaint(
+              painter: _DiceFacetPainter(
+                line: Theme.of(
+                  context,
+                ).colorScheme.secondary.withValues(alpha: .34),
+                glow: Theme.of(
+                  context,
+                ).colorScheme.tertiary.withValues(alpha: .18),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'd${widget.sides}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.secondary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                Text(
-                  '${widget.result}',
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    fontWeight: FontWeight.w900,
+                  Text(
+                    '${widget.result}',
+                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
       ),
     ),
   );
+}
+
+class _DiceFacetPainter extends CustomPainter {
+  const _DiceFacetPainter({required this.line, required this.glow});
+
+  final Color line;
+  final Color glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [glow, Colors.transparent],
+      ).createShader(Rect.fromCircle(center: center, radius: size.width * .58));
+    canvas.drawCircle(center, size.width * .58, glowPaint);
+
+    final paint = Paint()
+      ..color = line
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    final path = Path()
+      ..moveTo(size.width * .18, size.height * .18)
+      ..lineTo(size.width * .82, size.height * .18)
+      ..lineTo(size.width * .5, size.height * .86)
+      ..close()
+      ..moveTo(size.width * .18, size.height * .82)
+      ..lineTo(size.width * .82, size.height * .82)
+      ..lineTo(size.width * .5, size.height * .14)
+      ..close()
+      ..moveTo(size.width * .5, size.height * .1)
+      ..lineTo(size.width * .5, size.height * .9)
+      ..moveTo(size.width * .1, size.height * .5)
+      ..lineTo(size.width * .9, size.height * .5);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DiceFacetPainter oldDelegate) =>
+      oldDelegate.line != line || oldDelegate.glow != glow;
 }
