@@ -200,6 +200,12 @@ class _DiceRollerState extends State<DiceRoller> {
                         ),
                       ),
                       const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: _rolling ? null : _roll,
+                        icon: const Icon(Icons.casino_outlined),
+                        label: Text(_rolling ? 'Rolando...' : 'Rolar d$_sides'),
+                      ),
+                      const SizedBox(height: 10),
                       Center(
                         child: GestureDetector(
                           onTap: _rolling ? null : _roll,
@@ -229,12 +235,6 @@ class _DiceRollerState extends State<DiceRoller> {
                             Text('d$_sides: $_rawResult ${_modifierLabel()}'),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _rolling ? null : _roll,
-                        icon: const Icon(Icons.casino_outlined),
-                        label: Text(_rolling ? 'Rolando...' : 'Rolar d$_sides'),
                       ),
                     ],
                   ),

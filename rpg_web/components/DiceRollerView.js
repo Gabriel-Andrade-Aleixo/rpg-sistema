@@ -14,6 +14,7 @@ export default function DiceRollerView({ queuedRoll, onComplete }) {
   const [record, setRecord] = useState(null);
   const [history, setHistory] = useState([]);
   const handledQueue = useRef('');
+  const stageRef = useRef(null);
   const rolling = Boolean(animation && !record);
 
   useEffect(() => {
@@ -40,6 +41,12 @@ export default function DiceRollerView({ queuedRoll, onComplete }) {
     const next = createRoll(source);
     setRecord(null);
     setAnimation({ id: `${next.id}_${Date.now()}`, record: next, queueId });
+    if (window.innerWidth <= 720) {
+      window.requestAnimationFrame(() => stageRef.current?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center',
+      }));
+    }
   }
 
   function rollManual() {
@@ -113,7 +120,7 @@ export default function DiceRollerView({ queuedRoll, onComplete }) {
           )}
         </section>
 
-        <section className="diceStagePanel">
+        <section ref={stageRef} className="diceStagePanel">
           {animation
             ? <ThreeDice key={animation.id} sides={Number(animation.record.die.replace('d', '')) || sides} result={animation.record.rawResult} onSettled={settleRoll} />
             : <div className="diceIdle"><Dices aria-hidden="true" /><strong>d20</strong><span>Escolha um dado para começar.</span></div>}
