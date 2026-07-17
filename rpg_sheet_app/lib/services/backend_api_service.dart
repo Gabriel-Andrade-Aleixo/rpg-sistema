@@ -134,6 +134,39 @@ class BackendApiService {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> listAdminUsers() async {
+    final data = await _get('/admin/users');
+    final users = (data['users'] as List?) ?? [];
+    return users
+        .whereType<Map>()
+        .map((json) => Map<String, dynamic>.from(json))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> listAdminCharacters() async {
+    final data = await _get('/admin/characters');
+    final characters = (data['characters'] as List?) ?? [];
+    return characters
+        .whereType<Map>()
+        .map((json) => Map<String, dynamic>.from(json))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> transferCharacterOwner({
+    required String characterId,
+    required String ownerUserId,
+  }) async {
+    final data = await _put(
+      '/admin/characters/${Uri.encodeComponent(characterId)}/owner',
+      {'ownerUserId': ownerUserId},
+    );
+    final character = data['character'];
+    if (character is! Map) {
+      throw StateError('O backend não confirmou a transferência.');
+    }
+    return Map<String, dynamic>.from(character);
+  }
+
   Future<Character?> getCharacter(String id) async {
     final data = await _get('/characters/${Uri.encodeComponent(id)}');
     final character = data['character'];

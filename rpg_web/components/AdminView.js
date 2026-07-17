@@ -1,17 +1,21 @@
-import { useMemo, useState } from 'react';
-import { Image as ImageIcon, LayoutDashboard, Package, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Image as ImageIcon, LayoutDashboard, Package, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, UserRoundCog, X } from 'lucide-react';
 import { catalogGroups, displayDescription, findEntry, parseRuleMetadata } from '../lib/catalogEngine';
 import RpgImage from './RpgImage';
 
 const emptyItem = { name: '', type: 'Armadura', armorCategory: 'Leve', description: '', bonusTarget: 'defense', bonusValue: 1, weight: 0, imageUrl: '' };
 const emptySpell = { name: '', school: 'Arcana', topic: 'Sem tópico', className: '', actionType: '', actionId: '', level: 0, description: '', manaCost: 0, focusCost: 0, humanityCost: 0, range: '', damage: '', imageUrl: '' };
 
-export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem }) {
+export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem, onLoadAdminDirectory, onTransferCharacterOwner }) {
   const [tab, setTab] = useState('overview');
   const [editor, setEditor] = useState(null);
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminCharacters, setAdminCharacters] = useState([]);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [ownerSelection, setOwnerSelection] = useState({});
   const groups = catalogGroups(catalog);
   const withoutDescription = catalog.entries.filter((entry) => !entry.description?.trim()).length;
   const withoutImage = catalog.entries.filter((entry) => !entry.imageUrl).length;
@@ -30,6 +34,10 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   ];
   const activeEntries = tab === 'spells' ? groups.spells : groups.items;
   const filtered = useMemo(() => activeEntries.filter((entry) => entry.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))), [activeEntries, search]);
+
+  useEffect(() => {
+    if (tab === 'ownership' && !adminCharacters.length && !directoryLoading) loadDirectory();
+  }, [tab]);
 
   function beginCreate(kind) {
     setEditor({ kind, id: '', value: kind === 'spell' ? { ...emptySpell } : { ...emptyItem } });
@@ -73,24 +81,87 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     }
   }
 
+  async function loadDirectory() {
+    if (!onLoadAdminDirectory) return;
+    setDirectoryLoading(true);
+    setMessage('');
+    try {
+      const result = await onLoadAdminDirectory();
+      setAdminUsers(result.users || []);
+      setAdminCharacters(result.characters || []);
+      setOwnerSelection({});
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDirectoryLoading(false);
+    }
+  }
+
+  async function transfer(character) {
+    const ownerUserId = ownerSelection[character.id] || character.ownerUserId || '';
+    if (!ownerUserId || ownerUserId === character.ownerUserId) return;
+    setSubmitting(true);
+    setMessage('');
+    try {
+      const updated = await onTransferCharacterOwner(character.id, ownerUserId);
+      await loadDirectory();
+      setMessage(`Ficha ${character.name || updated?.name || ''} transferida.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function refresh() {
+    await onRefresh?.();
+    if (tab === 'ownership') await loadDirectory();
+  }
+
   return <section className="viewPage adminWorkspace">
-    <header className="viewHeader"><div><span className="eyebrow">Administração</span><h2>Biblioteca oficial</h2><p>Gerencie o conteúdo salvo no Supabase.</p></div><button className="ghostButton refreshButton" onClick={onRefresh}><RefreshCw aria-hidden="true" />Sincronizar</button></header>
+    <header className="viewHeader"><div><span className="eyebrow">Administração</span><h2>Biblioteca oficial</h2><p>Gerencie o conteúdo salvo no Supabase.</p></div><button className="ghostButton refreshButton" onClick={refresh}><RefreshCw aria-hidden="true" />Sincronizar</button></header>
     <nav className="adminTabs" aria-label="Áreas do modo mestre">
       <button className={tab === 'overview' ? 'active' : ''} onClick={() => { setTab('overview'); setEditor(null); }}><LayoutDashboard aria-hidden="true" />Visão geral</button>
       <button className={tab === 'items' ? 'active' : ''} onClick={() => { setTab('items'); setEditor(null); }}><Package aria-hidden="true" />Itens <span>{groups.items.length}</span></button>
       <button className={tab === 'spells' ? 'active' : ''} onClick={() => { setTab('spells'); setEditor(null); }}><Sparkles aria-hidden="true" />Magias <span>{groups.spells.length}</span></button>
+      <button className={tab === 'ownership' ? 'active' : ''} onClick={() => { setTab('ownership'); setEditor(null); }}><UserRoundCog aria-hidden="true" />Fichas <span>{adminCharacters.length || characters.length}</span></button>
     </nav>
-    {message && <p className={/criado|atualizado|removido/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
+    {message && <p className={/criado|atualizado|removido|transferida/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
     {tab === 'overview' ? <>
       <div className="adminGrid">{metrics.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}</div>
       <section className="adminDiagnostic"><div><h3>Qualidade do catálogo</h3><p>{invalid ? `${invalid} ficha(s) precisam de revisão de raça ou classe.` : 'As fichas estão consistentes com o catálogo atual.'}</p></div><div><strong>{catalog.board?.name || 'RPG Supabase'}</strong><span>Fonte oficial no Supabase</span></div></section>
-    </> : <div className={`catalogManager ${editor ? 'editing' : ''}`}>
+    </> : tab === 'ownership' ? <OwnershipManager catalog={catalog} users={adminUsers} characters={adminCharacters} ownerSelection={ownerSelection} setOwnerSelection={setOwnerSelection} loading={directoryLoading} submitting={submitting} onRefresh={loadDirectory} onTransfer={transfer} /> : <div className={`catalogManager ${editor ? 'editing' : ''}`}>
       <section className="catalogManagerList">
         <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}`} placeholder={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}...`} value={search} onChange={(event) => setSearch(event.target.value)} /></label><button className="primaryButton" onClick={() => beginCreate(tab === 'spells' ? 'spell' : 'item')}><Plus aria-hidden="true" />Novo</button></div>
         <div className="managerEntries">{filtered.map((entry) => <article className="managerEntry" key={entry.id}><RpgImage src={entry.imageUrl} alt="" className="managerThumb" fallback={<ImageIcon aria-hidden="true" />} /><div><strong>{entry.name}</strong><span>{entry.labels?.map((label) => label.name).filter(Boolean).slice(0, 2).join(' · ') || entry.category}</span><p>{summaryFromEntry(entry)}</p></div><div className="managerEntryActions"><button className="iconButton" title="Editar" aria-label={`Editar ${entry.name}`} onClick={() => beginEdit(tab === 'spells' ? 'spell' : 'item', entry)}><Pencil aria-hidden="true" /></button><button className="iconButton dangerButton" title="Excluir" aria-label={`Excluir ${entry.name}`} onClick={() => remove(tab === 'spells' ? 'spell' : 'item', entry)}><Trash2 aria-hidden="true" /></button></div></article>)}</div>
         {!filtered.length && <div className="managerEmpty"><span>{search ? 'Nenhum resultado para esta busca.' : `Nenhum ${tab === 'spells' ? 'feitiço' : 'item'} cadastrado.`}</span></div>}
       </section>
       {editor && <CatalogEditor editor={editor} setEditor={setEditor} onSubmit={save} submitting={submitting} />}
+    </div>}
+  </section>;
+}
+
+function OwnershipManager({ catalog, users, characters, ownerSelection, setOwnerSelection, loading, submitting, onRefresh, onTransfer }) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => characters.filter((character) => {
+    const haystack = [character.name, character.playerName, character.ownerName, character.ownerEmail].join(' ');
+    return haystack.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'));
+  }), [characters, query]);
+  return <section className="ownershipPanel">
+    <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label="Buscar fichas" placeholder="Buscar fichas por nome, jogador ou dono..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="ghostButton" type="button" onClick={onRefresh} disabled={loading}><RefreshCw aria-hidden="true" />Atualizar</button></div>
+    {loading ? <div className="managerEmpty"><span>Carregando usuários e fichas...</span></div> : <div className="ownershipRows">
+      {filtered.map((character) => {
+        const race = findEntry(catalog, character.raceId);
+        const characterClass = findEntry(catalog, character.classId);
+        const selectedOwner = ownerSelection[character.id] || character.ownerUserId || '';
+        return <article className="ownershipRow" key={character.id}>
+          <RpgImage src={character.imageUrl} alt="" className="managerThumb" fallback={<UserRoundCog aria-hidden="true" />} />
+          <div className="ownershipIdentity"><strong>{character.name || 'Sem nome'}</strong><span>{race?.name || 'Raça indisponível'} · {characterClass?.name || 'Classe indisponível'} · Nível {character.level || 1}</span><small>{character.isPrivate ? 'Privada' : 'Pública'} · Dono atual: {character.ownerName || character.ownerEmail || 'Sem dono'}</small></div>
+          <label className="ownershipSelect"><span>Novo dono</span><select value={selectedOwner} onChange={(event) => setOwnerSelection((current) => ({ ...current, [character.id]: event.target.value }))}><option value="">Selecionar usuário</option>{users.map((user) => <option key={user.id} value={user.id}>{user.displayName || user.email} · {user.email}</option>)}</select></label>
+          <button className="primaryButton" disabled={submitting || !selectedOwner || selectedOwner === character.ownerUserId} onClick={() => onTransfer(character)}>Transferir</button>
+        </article>;
+      })}
+      {!filtered.length && <div className="managerEmpty"><span>{query ? 'Nenhuma ficha encontrada.' : 'Nenhuma ficha cadastrada.'}</span></div>}
     </div>}
   </section>;
 }

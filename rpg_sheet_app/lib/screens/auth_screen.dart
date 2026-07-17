@@ -44,13 +44,11 @@ class _AuthScreenState extends State<AuthScreen> {
         );
         await widget.onDone();
       } else if (_mode == 'forgot') {
-        final token = await widget.repository.requestPasswordReset(
+        final result = await widget.repository.requestPasswordReset(
           _email.text.trim(),
         );
         setState(() {
-          _message = token.isEmpty
-              ? 'Se o email existir, enviaremos as instruções de recuperação.'
-              : 'Token de recuperação: $token';
+          _message = _passwordResetMessage(result);
         });
       } else if (_mode == 'reset') {
         await widget.repository.resetPassword(
@@ -80,6 +78,18 @@ class _AuthScreenState extends State<AuthScreen> {
       return 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
     }
     return 'Não foi possível continuar: $error';
+  }
+
+  String _passwordResetMessage(Map<String, dynamic> result) {
+    final token = result['resetToken']?.toString() ?? '';
+    if (token.isNotEmpty) return 'Token de recuperação: $token';
+    if (result['delivered'] == true) {
+      return 'Enviamos as instruções de recuperação para o email informado.';
+    }
+    if (result['emailConfigured'] == false) {
+      return 'O pedido foi registrado, mas o envio de email ainda não está configurado no backend.';
+    }
+    return 'Se o email existir, enviaremos as instruções de recuperação.';
   }
 
   @override

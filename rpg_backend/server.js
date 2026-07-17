@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 import {
   createPasswordReset,
+  listUsersForAdmin,
   loginUser,
   logoutToken,
   publicUser,
@@ -15,6 +16,7 @@ import {
   ensureCatalogCategories,
   getCharacterForUserFromDatabase,
   getCharacterOwnershipFromDatabase,
+  listCharactersForAdminFromDatabase,
   insertCatalogEntry,
   listOwnedCharactersFromDatabase,
   listPublicCharacterSummariesFromDatabase,
@@ -23,6 +25,7 @@ import {
   normalizeVisibility,
   saveCharacterToDatabase,
   deleteCharacterForUserFromDatabase,
+  transferCharacterOwnershipInDatabase,
   updateCatalogEntryById,
 } from './lib/catalogStore.js';
 
@@ -79,6 +82,7 @@ export async function requestHandler(req, res) {
       return sendJson(res, 200, {
         ok: true,
         delivered: reset.delivered,
+        emailConfigured: reset.emailConfigured,
         ...(reset.resetToken ? { resetToken: reset.resetToken, resetUrl: reset.resetUrl } : {}),
       });
     }
@@ -93,6 +97,29 @@ export async function requestHandler(req, res) {
       await requireAdmin(req);
       await setupDatabaseCatalogs();
       return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'GET' && path === '/admin/users') {
+      await requireAdmin(req);
+      return sendJson(res, 200, { ok: true, users: (await listUsersForAdmin()).map(publicUser) });
+    }
+
+    if (req.method === 'GET' && path === '/admin/characters') {
+      await requireAdmin(req);
+      return sendJson(res, 200, { ok: true, characters: await listCharactersForAdminFromDatabase() });
+    }
+
+    const adminOwnerMatch = path.match(/^\/admin\/characters\/([^/]+)\/owner$/);
+    if (adminOwnerMatch && req.method === 'PUT') {
+      await requireAdmin(req);
+      const body = await readJson(req);
+      const ownerUserId = String(body.ownerUserId || '').trim();
+      if (!ownerUserId) throw new AppError('Selecione o novo dono da ficha.', 400);
+      const character = await transferCharacterOwnershipInDatabase(
+        decodeURIComponent(adminOwnerMatch[1]),
+        ownerUserId,
+      );
+      return sendJson(res, 200, { ok: true, character });
     }
 
     if (req.method === 'GET' && path === '/catalog') {

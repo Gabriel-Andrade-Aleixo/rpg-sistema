@@ -17,9 +17,15 @@ O backend expõe autenticação, personagens e o catálogo oficial salvo no Supa
 DATABASE_URL=postgresql://...
 PASSWORD_RESET_BASE_URL=http://localhost:3000
 AUTH_EXPOSE_RESET_TOKEN=true
+SMTP_HOST=smtp.seu-provedor.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=usuario@dominio.com
+SMTP_PASS=sua-senha-ou-app-password
+MAIL_FROM="Runalith RPG <usuario@dominio.com>"
 ```
 
-Use `AUTH_EXPOSE_RESET_TOKEN=true` apenas em desenvolvimento ou enquanto ainda não houver envio real de email. Em produção, deixe desativado e conecte um provedor de email para entregar o link de recuperação.
+Use `AUTH_EXPOSE_RESET_TOKEN=true` apenas em desenvolvimento ou enquanto ainda não houver envio real de email. Em produção, deixe desativado e conecte um provedor SMTP para entregar o link/token de recuperação. Se as variáveis `SMTP_*`/`MAIL_FROM` não estiverem configuradas no backend ou na Vercel, a tela avisará que o pedido foi registrado, mas o email ainda não foi enviado.
 
 ## Flutter
 

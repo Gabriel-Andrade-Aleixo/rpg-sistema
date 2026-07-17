@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 
+import { emailDeliveryConfigured, sendPasswordResetEmail } from './emailService.js';
 import { query, transaction } from './postgres.js';
 
 const pbkdf2 = promisify(crypto.pbkdf2);
@@ -81,6 +82,7 @@ export async function logoutToken(header) {
 
 export async function createPasswordReset({ email }) {
   const normalizedEmail = normalizeEmail(email);
+  const emailConfigured = emailDeliveryConfigured();
   const result = await query(
     `SELECT id, email, display_name, role, created_at
      FROM rpg_users
@@ -88,19 +90,33 @@ export async function createPasswordReset({ email }) {
     [normalizedEmail],
   );
   const row = result.rows[0];
-  if (!row) return { delivered: false, resetToken: '' };
+  if (!row) return { delivered: false, emailConfigured, resetToken: '' };
   const token = randomToken();
   await query(
     `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
      VALUES ($1, $2, now() + ($3 || ' minutes')::interval)`,
     [row.id, hashToken(token), RESET_MINUTES],
   );
+  const user = userFromRow(row);
+  const link = resetUrl(token);
+  const delivery = await deliverPasswordReset({ user, token, resetUrl: link });
   return {
-    delivered: false,
+    delivered: delivery.delivered,
+    emailConfigured: delivery.configured,
     resetToken: shouldExposeResetToken() ? token : '',
-    resetUrl: resetUrl(token),
-    user: userFromRow(row),
+    resetUrl: link,
+    user,
   };
+}
+
+export async function listUsersForAdmin() {
+  const result = await query(
+    `SELECT id, email, display_name, role, created_at
+     FROM rpg_users
+     WHERE deleted_at IS NULL
+     ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, display_name, email`,
+  );
+  return result.rows.map(userFromRow);
 }
 
 export async function resetPassword({ token, password }) {
@@ -219,4 +235,19 @@ function resetUrl(token) {
   if (!base || !token) return '';
   const separator = base.includes('?') ? '&' : '?';
   return `${base}${separator}token=${encodeURIComponent(token)}`;
+}
+
+async function deliverPasswordReset({ user, token, resetUrl }) {
+  if (!emailDeliveryConfigured()) return { delivered: false, configured: false };
+  try {
+    return await sendPasswordResetEmail({
+      user,
+      token,
+      resetUrl,
+      expiresMinutes: RESET_MINUTES,
+    });
+  } catch (error) {
+    console.error('Falha ao enviar email de recuperação de senha.', error);
+    return { delivered: false, configured: true };
+  }
 }

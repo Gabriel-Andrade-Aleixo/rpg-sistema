@@ -63,6 +63,32 @@ class CharacterRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> listAdminUsers() async {
+    if (!usingBackend) return const [];
+    return _backendApiService.listAdminUsers();
+  }
+
+  Future<List<Map<String, dynamic>>> listAdminCharacters() async {
+    if (!usingBackend) return const [];
+    return _backendApiService.listAdminCharacters();
+  }
+
+  Future<void> transferCharacterOwner({
+    required String characterId,
+    required String ownerUserId,
+  }) async {
+    if (!usingBackend) {
+      throw StateError('Configure BACKEND_URL para transferir fichas.');
+    }
+    await _backendApiService.transferCharacterOwner(
+      characterId: characterId,
+      ownerUserId: ownerUserId,
+    );
+    _savedCharacters.remove(characterId);
+    _pendingCharacters.remove(characterId);
+    _saveTimers.remove(characterId)?.cancel();
+  }
+
   Future<Character?> getCharacter(String id) async {
     final pending = _pendingCharacters[id];
     if (pending != null) return pending;

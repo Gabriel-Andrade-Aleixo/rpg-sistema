@@ -5,6 +5,16 @@ import 'package:flutter/material.dart';
 import '../../../models/catalog_models.dart';
 import '../../../models/character.dart';
 
+class AdminOwnershipDirectory {
+  const AdminOwnershipDirectory({
+    required this.users,
+    required this.characters,
+  });
+
+  final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> characters;
+}
+
 class AdminScreen extends StatefulWidget {
   const AdminScreen({
     super.key,
@@ -13,6 +23,8 @@ class AdminScreen extends StatefulWidget {
     required this.onRefresh,
     required this.onSaveEntry,
     required this.onDeleteEntry,
+    required this.onLoadOwnership,
+    required this.onTransferOwner,
     this.embedded = false,
   });
 
@@ -25,6 +37,9 @@ class AdminScreen extends StatefulWidget {
   )
   onSaveEntry;
   final Future<void> Function(String kind, String id) onDeleteEntry;
+  final Future<AdminOwnershipDirectory> Function() onLoadOwnership;
+  final Future<void> Function(String characterId, String ownerUserId)
+  onTransferOwner;
   final Future<void> Function() onRefresh;
   final bool embedded;
 
@@ -35,6 +50,8 @@ class AdminScreen extends StatefulWidget {
 class _AdminScreenState extends State<AdminScreen> {
   var _tab = 0;
   var _query = '';
+  Future<AdminOwnershipDirectory>? _ownershipFuture;
+  final Map<String, String> _ownerSelection = {};
 
   List<CatalogEntry> get _spells => widget.catalog.entriesFor('magias');
 
@@ -91,12 +108,20 @@ class _AdminScreenState extends State<AdminScreen> {
                       icon: Icon(Icons.auto_awesome_outlined),
                       label: Text('Magias'),
                     ),
+                    ButtonSegment(
+                      value: 3,
+                      icon: Icon(Icons.swap_horiz_outlined),
+                      label: Text('Fichas'),
+                    ),
                   ],
                   selected: {_tab},
                   showSelectedIcon: false,
                   onSelectionChanged: (value) => setState(() {
                     _tab = value.first;
                     _query = '';
+                    if (_tab == 3) {
+                      _ownershipFuture ??= widget.onLoadOwnership();
+                    }
                   }),
                 ),
               ),
@@ -106,6 +131,8 @@ class _AdminScreenState extends State<AdminScreen> {
         Expanded(
           child: _tab == 0
               ? _overview(context)
+              : _tab == 3
+              ? _ownership(context)
               : _manager(context, _tab == 2 ? 'spell' : 'item'),
         ),
       ],
@@ -220,6 +247,230 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
       ],
     );
+  }
+
+  Widget _ownership(BuildContext context) {
+    _ownershipFuture ??= widget.onLoadOwnership();
+    return FutureBuilder<AdminOwnershipDirectory>(
+      future: _ownershipFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 42),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Não foi possível carregar as fichas.\n${snapshot.error}',
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _reloadOwnership,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final directory = snapshot.data!;
+        final query = normalizeCatalogText(_query);
+        final characters = directory.characters.where((character) {
+          final text = [
+            _mapText(character, 'name'),
+            _mapText(character, 'playerName'),
+            _mapText(character, 'ownerName'),
+            _mapText(character, 'ownerEmail'),
+          ].join(' ');
+          return normalizeCatalogText(text).contains(query);
+        }).toList();
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Buscar fichas...',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: (value) => setState(() => _query = value),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: 'Atualizar fichas',
+                    onPressed: _reloadOwnership,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: characters.isEmpty
+                  ? Center(
+                      child: Text(
+                        _query.isEmpty
+                            ? 'Nenhuma ficha cadastrada.'
+                            : 'Nenhuma ficha encontrada.',
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: characters.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) => _ownershipCard(
+                        context,
+                        characters[index],
+                        directory.users,
+                      ),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _ownershipCard(
+    BuildContext context,
+    Map<String, dynamic> character,
+    List<Map<String, dynamic>> users,
+  ) {
+    final id = _mapText(character, 'id');
+    final currentOwner = _mapText(character, 'ownerUserId');
+    final selectedOwner = _ownerSelection[id] ?? currentOwner;
+    final selectedExists = users.any(
+      (user) => _mapText(user, 'id') == selectedOwner,
+    );
+    final race = widget.catalog.findById(_mapText(character, 'raceId'));
+    final characterClass = widget.catalog.findById(
+      _mapText(character, 'classId'),
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _characterThumbnail(context, character),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _mapText(character, 'name').isEmpty
+                            ? 'Sem nome'
+                            : _mapText(character, 'name'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${race?.name ?? 'Raça indisponível'} · ${characterClass?.name ?? 'Classe indisponível'} · Nível ${_mapText(character, 'level').isEmpty ? '1' : _mapText(character, 'level')}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${_mapText(character, 'isPrivate') == 'true' ? 'Privada' : 'Pública'} · Dono atual: ${_mapText(character, 'ownerName').isEmpty ? _mapText(character, 'ownerEmail') : _mapText(character, 'ownerName')}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedExists ? selectedOwner : null,
+              decoration: const InputDecoration(labelText: 'Novo dono'),
+              items: users
+                  .map(
+                    (user) => DropdownMenuItem(
+                      value: _mapText(user, 'id'),
+                      child: Text(
+                        '${_mapText(user, 'displayName').isEmpty ? _mapText(user, 'email') : _mapText(user, 'displayName')} · ${_mapText(user, 'email')}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setState(() {
+                if (value == null || value.isEmpty) {
+                  _ownerSelection.remove(id);
+                } else {
+                  _ownerSelection[id] = value;
+                }
+              }),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed:
+                    selectedOwner.isEmpty || selectedOwner == currentOwner
+                    ? null
+                    : () => _transferOwner(id, selectedOwner),
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Transferir ficha'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _characterThumbnail(
+    BuildContext context,
+    Map<String, dynamic> character,
+  ) {
+    final imageUrl = _mapText(character, 'imageUrl');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(7),
+      child: SizedBox(
+        width: 58,
+        height: 58,
+        child: imageUrl.isEmpty
+            ? ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: const Icon(Icons.shield_outlined),
+              )
+            : Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) =>
+                    const Icon(Icons.broken_image_outlined),
+              ),
+      ),
+    );
+  }
+
+  Future<void> _reloadOwnership() async {
+    setState(() {
+      _ownershipFuture = widget.onLoadOwnership();
+      _ownerSelection.clear();
+    });
+  }
+
+  Future<void> _transferOwner(String characterId, String ownerUserId) async {
+    await _runAction(context, () async {
+      await widget.onTransferOwner(characterId, ownerUserId);
+      await _reloadOwnership();
+    }, 'Ficha transferida.');
   }
 
   Widget _manager(BuildContext context, String kind) {
@@ -764,4 +1015,7 @@ class _AdminScreenState extends State<AdminScreen> {
     'outra' => 'Outra',
     _ => 'Arcana',
   };
+
+  String _mapText(Map<String, dynamic> map, String key) =>
+      map[key]?.toString() ?? '';
 }

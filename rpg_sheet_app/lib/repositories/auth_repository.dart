@@ -41,9 +41,9 @@ class AuthRepository {
     return _save(data);
   }
 
-  Future<String> requestPasswordReset(String email) async {
+  Future<Map<String, dynamic>> requestPasswordReset(String email) async {
     final data = await _backend.requestPasswordReset(email);
-    return data['resetToken']?.toString() ?? '';
+    return data;
   }
 
   Future<void> resetPassword(String token, String password) =>

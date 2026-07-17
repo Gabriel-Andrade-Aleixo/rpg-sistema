@@ -261,6 +261,18 @@ export async function listCharactersFromDatabase() {
   return result.rows.map((row) => row.data).filter(Boolean);
 }
 
+export async function listCharactersForAdminFromDatabase() {
+  const result = await query(
+    `SELECT c.data, c.summary, c.owner_user_id, c.visibility, c.updated_at,
+            u.email AS owner_email, u.display_name AS owner_name
+     FROM characters c
+     LEFT JOIN rpg_users u ON u.id = c.owner_user_id
+     WHERE c.deleted_at IS NULL
+     ORDER BY c.updated_at DESC, c.name`,
+  );
+  return result.rows.map(adminCharacterSummary);
+}
+
 export async function listOwnedCharactersFromDatabase(userId) {
   const result = await query(
     `SELECT data
@@ -363,6 +375,65 @@ export async function saveCharacterToDatabase(character, changedFields = [], own
   });
 }
 
+export async function transferCharacterOwnershipInDatabase(id, nextOwnerUserId) {
+  return transaction(async (client) => {
+    const owner = await client.query(
+      `SELECT id, email, display_name
+       FROM rpg_users
+       WHERE id = $1 AND deleted_at IS NULL
+       LIMIT 1`,
+      [nextOwnerUserId],
+    );
+    if (!owner.rows[0]) {
+      const error = new Error('Novo dono da ficha não encontrado.');
+      error.statusCode = 404;
+      throw error;
+    }
+    const current = await client.query(
+      `SELECT data, sync_revision
+       FROM characters
+       WHERE id = $1 AND deleted_at IS NULL
+       FOR UPDATE`,
+      [id],
+    );
+    const row = current.rows[0];
+    if (!row) {
+      const error = new Error('Ficha não encontrada.');
+      error.statusCode = 404;
+      throw error;
+    }
+    const revision = Math.max(Number(row.sync_revision || 0), Number(row.data?.syncRevision || 0)) + 1;
+    const data = {
+      ...(row.data || {}),
+      ownerUserId: nextOwnerUserId,
+      syncRevision: revision,
+      updatedAt: new Date().toISOString(),
+    };
+    const summary = characterSummary(data, nextOwnerUserId);
+    const updated = await client.query(
+      `UPDATE characters
+       SET owner_user_id = $2,
+           data = $3::jsonb,
+           summary = $4::jsonb,
+           sync_revision = $5,
+           updated_at = now()
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING data, summary, owner_user_id, visibility, updated_at`,
+      [id, nextOwnerUserId, JSON.stringify(data), JSON.stringify(summary), revision],
+    );
+    await client.query(
+      `INSERT INTO character_revisions (character_id, sync_revision, changed_fields, data)
+       VALUES ($1, $2, $3::text[], $4::jsonb)`,
+      [id, revision, ['ownerUserId'], JSON.stringify(data)],
+    );
+    return adminCharacterSummary({
+      ...updated.rows[0],
+      owner_email: owner.rows[0].email,
+      owner_name: owner.rows[0].display_name,
+    });
+  });
+}
+
 export async function deleteCharacterFromDatabase(id) {
   await query(
     'UPDATE characters SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL',
@@ -419,6 +490,23 @@ export function publicCharacterSummary(data, storedSummary = {}, ownerUserId = n
     ownerName: ownerName || '',
     access: 'summary',
     updatedAt: summary.updatedAt || null,
+  };
+}
+
+function adminCharacterSummary(row) {
+  const summary = {
+    ...characterSummary(row.data, row.owner_user_id),
+    ...(row.summary && typeof row.summary === 'object' ? row.summary : {}),
+  };
+  return {
+    ...summary,
+    ownerUserId: row.owner_user_id || summary.ownerUserId || '',
+    ownerName: row.owner_name || '',
+    ownerEmail: row.owner_email || '',
+    visibility: normalizeVisibility(row.visibility || summary.visibility),
+    isPrivate: normalizeVisibility(row.visibility || summary.visibility) === 'private',
+    access: 'admin',
+    updatedAt: row.updated_at || summary.updatedAt || null,
   };
 }
 

@@ -436,6 +436,18 @@ textarea { resize: vertical; }
 .managerEntry span { color: var(--gold); font-size: 11px; font-weight: 750; }
 .managerEntry p { margin: 0; color: var(--muted); font-size: 12px; }
 .managerEntryActions { display: flex; gap: 5px; }
+.ownershipPanel { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.ownershipRows { display: grid; }
+.ownershipRow { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(240px, 330px) auto; align-items: center; gap: 12px; min-height: 92px; padding: 12px; border-top: 1px solid var(--line); background: var(--surface); }
+.ownershipRow:first-child { border-top: 0; }
+.ownershipRow:hover { background: var(--surface-2); }
+.ownershipIdentity { display: grid; gap: 3px; min-width: 0; }
+.ownershipIdentity strong, .ownershipIdentity span, .ownershipIdentity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ownershipIdentity span { color: var(--gold); font-size: 12px; font-weight: 750; }
+.ownershipIdentity small { color: var(--muted); font-size: 12px; }
+.ownershipSelect { display: grid; gap: 5px; margin: 0; }
+.ownershipSelect span { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.ownershipSelect select { width: 100%; }
 .dangerButton { color: var(--danger); }
 .managerEmpty { display: grid; place-items: center; min-height: 260px; color: var(--muted); }
 .catalogEditor { position: sticky; top: 18px; padding: 15px; box-shadow: var(--shadow); }
@@ -573,6 +585,8 @@ textarea { resize: vertical; }
   .managerEntry { grid-template-columns: 54px minmax(0, 1fr); }
   .managerThumb { width: 54px; height: 54px; }
   .managerEntryActions { grid-column: 2; }
+  .ownershipRow { grid-template-columns: 54px minmax(0, 1fr); align-items: start; }
+  .ownershipSelect, .ownershipRow > .primaryButton { grid-column: 1 / -1; width: 100%; }
   .formPair, .formTriple { grid-template-columns: 1fr; }
 }
 

@@ -310,6 +310,22 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _reload(refreshCatalog: true));
           await _future;
         },
+        onLoadOwnership: () async {
+          final users = await widget.repository.listAdminUsers();
+          final adminCharacters = await widget.repository.listAdminCharacters();
+          return AdminOwnershipDirectory(
+            users: users,
+            characters: adminCharacters,
+          );
+        },
+        onTransferOwner: (characterId, ownerUserId) async {
+          await widget.repository.transferCharacterOwner(
+            characterId: characterId,
+            ownerUserId: ownerUserId,
+          );
+          setState(_reload);
+          await _future;
+        },
         onRefresh: () async {
           setState(() => _reload(refreshCatalog: true));
           await _future;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, Crown, Dices, LogOut, Moon, Pencil, Plus, Shield, Sun, Trash2, UserRound } from 'lucide-react';
-import { clearSession, createCatalogItem, createCatalogSpell, deleteCatalogEntry, deleteCharacter, listCharacters, loadCatalog, loadStoredSession, login, logout, register, requestPasswordReset, resetPassword, saveCharacter, updateCatalogEntry } from '../lib/api';
+import { clearSession, createCatalogItem, createCatalogSpell, deleteCatalogEntry, deleteCharacter, listAdminCharacters, listAdminUsers, listCharacters, loadCatalog, loadStoredSession, login, logout, register, requestPasswordReset, resetPassword, saveCharacter, transferCharacterOwner, updateCatalogEntry } from '../lib/api';
 import { emptyCharacter } from '../lib/rpgData';
 import { findEntry, migrateCharacter } from '../lib/catalogEngine';
 import { changedCharacterFields, compactCharacter } from '../lib/characterSync';
@@ -243,6 +243,16 @@ export default function Home() {
     }
   }
 
+  async function loadAdminDirectory() {
+    const [users, adminCharacters] = await Promise.all([listAdminUsers(), listAdminCharacters()]);
+    return { users, characters: adminCharacters };
+  }
+
+  async function transferMasterCharacter(characterId, ownerUserId) {
+    await transferCharacterOwner(characterId, ownerUserId);
+    await load(true, selectedId);
+  }
+
   if (!session?.token) {
     return <AuthView loading={loading || saving} error={error} onAuth={handleAuth} />;
   }
@@ -283,7 +293,7 @@ export default function Home() {
         {loading && <LoadingOverlay label="Sincronizando fichas e catálogo..." />}
         {saving && <div className="savingBar">Salvando ficha...</div>}
         {view === 'catalog' && <CatalogView catalog={catalog} />}
-        {view === 'admin' && session.user?.role === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} />}
+        {view === 'admin' && session.user?.role === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} onLoadAdminDirectory={loadAdminDirectory} onTransferCharacterOwner={transferMasterCharacter} />}
         {view === 'dice' && <DiceRollerView queuedRoll={diceRequest} onComplete={completeQueuedRoll} />}
         {view === 'wizard' && draft && <CharacterWizard initial={draft} catalog={catalog} onSave={persistDraft} onCancel={() => { setDraft(null); setView('sheet'); }} requestRoll={requestRoll} />}
         {view === 'sheet' && selected && <CharacterSheet character={selected} catalog={catalog} onEdit={beginEdit} onUpdate={updateCharacter} requestRoll={requestRoll} />}
@@ -311,7 +321,7 @@ function AuthView({ loading, error, onAuth }) {
     try {
       if (mode === 'forgot') {
         const result = await requestPasswordReset(email);
-        setMessage(result.resetToken ? `Token de recuperação: ${result.resetToken}` : 'Se o email existir, enviaremos as instruções de recuperação.');
+        setMessage(passwordResetMessage(result));
         return;
       }
       if (mode === 'reset') {
@@ -329,6 +339,13 @@ function AuthView({ loading, error, onAuth }) {
   }
 
   return <main className="authShell"><section className="authPanel"><BrandMark compact /><div><span className="eyebrow">Acesso</span><h2>{mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Recuperar senha' : mode === 'reset' ? 'Nova senha' : 'Entrar'}</h2><p>Entre para gerenciar suas fichas. Outros jogadores verão somente o resumo público das fichas não privadas.</p></div><form className="authForm" onSubmit={submit}>{mode !== 'reset' && <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}{mode === 'register' && <label>Nome de exibição<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>}{mode === 'reset' && <label>Token de recuperação<input value={token} onChange={(event) => setToken(event.target.value)} required /></label>}{mode !== 'forgot' && <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /></label>}<button className="primaryButton" disabled={loading} type="submit">{loading ? 'Aguarde...' : mode === 'register' ? 'Cadastrar' : mode === 'forgot' ? 'Solicitar recuperação' : mode === 'reset' ? 'Trocar senha' : 'Entrar'}</button></form>{error && <p className="validationError">{error}</p>}{message && <p className="noticeText">{message}</p>}<div className="authSwitch"><button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Criar uma conta' : 'Já tenho conta'}</button><button onClick={() => setMode('forgot')}>Esqueci a senha</button><button onClick={() => setMode('reset')}>Tenho token</button></div></section></main>;
+}
+
+function passwordResetMessage(result) {
+  if (result?.resetToken) return `Token de recuperação: ${result.resetToken}`;
+  if (result?.delivered) return 'Enviamos as instruções de recuperação para o email informado.';
+  if (result?.emailConfigured === false) return 'O pedido foi registrado, mas o envio de email ainda não está configurado no backend.';
+  return 'Se o email existir, enviaremos as instruções de recuperação.';
 }
 
 function CharacterChooser({ characters, publicCharacters = [], catalog, onSelect, onCreate }) {

@@ -102,6 +102,25 @@ export async function listCharacters() {
   return { characters: data.characters || [], publicCharacters: data.publicCharacters || [] };
 }
 
+export async function listAdminUsers() {
+  const data = await request('/admin/users');
+  return data.users || [];
+}
+
+export async function listAdminCharacters() {
+  const data = await request('/admin/characters');
+  return data.characters || [];
+}
+
+export async function transferCharacterOwner(characterId, ownerUserId) {
+  const data = await request(`/admin/characters/${encodeURIComponent(characterId)}/owner`, {
+    method: 'PUT',
+    body: JSON.stringify({ ownerUserId }),
+  });
+  if (!data.character?.id) throw new Error('O backend não confirmou a transferência da ficha.');
+  return data.character;
+}
+
 export async function loadCatalog(refresh = false) {
   const data = await request(`/catalog${refresh ? '?refresh=true' : ''}`);
   return data.catalog || { entries: [], categories: [] };
