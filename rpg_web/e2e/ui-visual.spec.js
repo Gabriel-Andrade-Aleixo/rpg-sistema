@@ -10,8 +10,15 @@ const catalog = {
 };
 
 async function prepare(page, viewport) {
+  await page.addInitScript((session) => {
+    window.localStorage.setItem('rpg-auth-session', JSON.stringify(session));
+  }, {
+    token: 'e2e-admin-token',
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    user: { id: 'user_e2e_admin', email: 'mestre.e2e@example.com', displayName: 'Mestre E2E', role: 'admin' },
+  });
   await page.setViewportSize(viewport);
-  await page.route('http://localhost:8787/characters', (route) => route.fulfill({ json: { ok: true, characters: [] } }));
+  await page.route('http://localhost:8787/characters', (route) => route.fulfill({ json: { ok: true, characters: [], publicCharacters: [] } }));
   await page.route('http://localhost:8787/catalog*', (route) => route.fulfill({ json: { ok: true, catalog } }));
   await page.goto(process.env.RPG_WEB_URL || 'http://localhost:3000');
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Copy, Crown, Moon, Pencil, Plus, Shield, Sun, Trash2 } from 'lucide-react';
-import { createCatalogItem, createCatalogSpell, deleteCatalogEntry, deleteCharacter, listCharacters, loadCatalog, saveCharacter, updateCatalogEntry } from '../lib/api';
+import { BookOpen, Copy, Crown, LogOut, Moon, Pencil, Plus, Shield, Sun, Trash2, UserRound } from 'lucide-react';
+import { clearSession, createCatalogItem, createCatalogSpell, deleteCatalogEntry, deleteCharacter, listCharacters, loadCatalog, loadStoredSession, login, logout, register, requestPasswordReset, resetPassword, saveCharacter, updateCatalogEntry } from '../lib/api';
 import { emptyCharacter } from '../lib/rpgData';
 import { findEntry, migrateCharacter } from '../lib/catalogEngine';
 import { changedCharacterFields, compactCharacter } from '../lib/characterSync';
@@ -13,7 +13,9 @@ import RpgImage from '../components/RpgImage';
 
 export default function Home() {
   const [characters, setCharacters] = useState([]);
+  const [publicCharacters, setPublicCharacters] = useState([]);
   const [catalog, setCatalog] = useState({ entries: [], categories: [] });
+  const [session, setSession] = useState(null);
   const [selectedId, setSelectedId] = useState('');
   const [view, setView] = useState('sheet');
   const [draft, setDraft] = useState(null);
@@ -32,15 +34,22 @@ export default function Home() {
     setLoading(true);
     setError('');
     try {
-      const [rawCharacters, nextCatalog] = await Promise.all([listCharacters(), loadCatalog(refresh)]);
-      const migrated = rawCharacters.map((item) => migrateCharacter(item, nextCatalog));
+      const [characterPayload, nextCatalog] = await Promise.all([listCharacters(), loadCatalog(refresh)]);
+      const migrated = characterPayload.characters.map((item) => migrateCharacter(item, nextCatalog));
       savedCharacters.current = new Map(migrated.map((item) => [item.id, structuredClone(item)]));
       setCatalog(nextCatalog);
       setCharacters(migrated);
+      setPublicCharacters(characterPayload.publicCharacters || []);
       const nextId = preferredId && migrated.some((item) => item.id === preferredId) ? preferredId : '';
       setSelectedId(nextId);
     } catch (reason) {
       setError(reason.message);
+      if (reason.status === 401) {
+        clearSession();
+        setSession(null);
+        setCharacters([]);
+        setPublicCharacters([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -49,7 +58,12 @@ export default function Home() {
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('rpg-theme');
     if (savedTheme) setTheme(savedTheme);
-    load();
+    const stored = loadStoredSession();
+    setSession(stored);
+    if (stored?.token) load();
+    else {
+      loadCatalog().then(setCatalog).catch((reason) => setError(reason.message)).finally(() => setLoading(false));
+    }
   }, []);
 
   useEffect(() => {
@@ -72,6 +86,7 @@ export default function Home() {
   }
 
   function beginCreate() {
+    if (!session?.token) { setError('Faça login para criar uma ficha.'); return; }
     if (!catalog.entries.length) { setError('O catálogo oficial está indisponível. Sincronize o Supabase antes de criar uma ficha.'); return; }
     setDraft(emptyCharacter());
     setView('wizard');
@@ -101,9 +116,34 @@ export default function Home() {
     }
   }
 
+  async function handleAuth(action, payload) {
+    setSaving(true);
+    setError('');
+    try {
+      const nextSession = action === 'register' ? await register(payload) : await login(payload);
+      setSession(nextSession);
+      await load(true);
+    } catch (reason) {
+      setError(reason.message);
+      throw reason;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLogout() {
+    await logout();
+    setSession(null);
+    setCharacters([]);
+    setPublicCharacters([]);
+    setSelectedId('');
+    setView('sheet');
+    setDraft(null);
+  }
+
   function updateCharacter(character) {
     const compact = compactCharacter(character);
-    setCharacters((current) => current.map((item) => item.id === compact.id ? compact : item));
+    setCharacters((current) => current.map((item) => item.id === compact.id ? character : item));
     pendingCharacters.current.set(compact.id, compact);
     scheduleCharacterSave(compact.id);
   }
@@ -200,6 +240,10 @@ export default function Home() {
     }
   }
 
+  if (!session?.token) {
+    return <AuthView loading={loading || saving} error={error} onAuth={handleAuth} />;
+  }
+
   return (
     <main className="appShell">
       <aside className="sidebar">
@@ -208,18 +252,23 @@ export default function Home() {
         <nav className="mainNav">
           <button className={view === 'sheet' || view === 'wizard' ? 'active' : ''} onClick={() => { setView('sheet'); setDraft(null); }}><Shield aria-hidden="true" /><span>Fichas</span></button>
           <button className={view === 'catalog' ? 'active' : ''} onClick={() => setView('catalog')}><BookOpen aria-hidden="true" /><span>Catálogo</span></button>
-          <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}><Crown aria-hidden="true" /><span>Mestre</span></button>
+          {session.user?.role === 'admin' && <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}><Crown aria-hidden="true" /><span>Mestre</span></button>}
         </nav>
-        <div className="statusRow"><span>{characters.length} fichas</span><span>{catalog.entries?.length || 0} cartões</span></div>
+        <div className="statusRow"><span>{characters.length} minhas</span><span>{publicCharacters.length} públicas</span></div>
+        <div className="userBox"><UserRound aria-hidden="true" /><span><strong>{session.user?.displayName || session.user?.email}</strong><small>{session.user?.role === 'admin' ? 'Mestre' : 'Jogador'}</small></span><button title="Sair" onClick={handleLogout}><LogOut aria-hidden="true" /></button></div>
         {loading && <p className="muted">Sincronizando...</p>}
         {error && <div className="sidebarError"><p>{error}</p><button onClick={() => load(true)}>Tentar novamente</button></div>}
         <div className="characterList">{characters.map((character) => {
           const race = findEntry(catalog, character.raceId), characterClass = findEntry(catalog, character.classId);
           return <article className={`characterCard ${selectedId === character.id && view === 'sheet' ? 'active' : ''}`} key={character.id}>
-            <button className="characterMain" onClick={() => { setSelectedId(character.id); setView('sheet'); }}><RpgImage src={character.imageUrl} alt={character.name} className="sidebarAvatar" fallback="◇" /><span><strong>{character.name || 'Sem nome'}</strong><small>{race?.name || 'Raça indisponível'} · {characterClass?.name || 'Classe indisponível'} · Nível {character.level}</small><i><b style={{ width: `${character.maxHp ? Math.min(100, character.currentHp / character.maxHp * 100) : 0}%` }} /></i></span></button>
+            <button className="characterMain" onClick={() => { setSelectedId(character.id); setView('sheet'); }}><RpgImage src={character.imageUrl} alt={character.name} className="sidebarAvatar" fallback="◇" /><span><strong>{character.name || 'Sem nome'}{(character.visibility || 'public') === 'private' ? ' · privada' : ''}</strong><small>{race?.name || 'Raça indisponível'} · {characterClass?.name || 'Classe indisponível'} · Nível {character.level}</small><i><b style={{ width: `${character.maxHp ? Math.min(100, character.currentHp / character.maxHp * 100) : 0}%` }} /></i></span></button>
             <div className="cardActions"><button title="Editar" onClick={() => { setSelectedId(character.id); setDraft(structuredClone(character)); setView('wizard'); }}><Pencil aria-hidden="true" />Editar</button><button title="Duplicar" onClick={() => duplicateCharacter(character)}><Copy aria-hidden="true" />Duplicar</button><button title="Excluir" onClick={() => removeCharacter(character)}><Trash2 aria-hidden="true" />Excluir</button></div>
           </article>;
         })}</div>
+        {!!publicCharacters.length && <div className="publicList"><span className="eyebrow">Outros jogadores</span>{publicCharacters.slice(0, 12).map((character) => {
+          const race = findEntry(catalog, character.raceId), characterClass = findEntry(catalog, character.classId);
+          return <article className="publicCharacterCard" key={character.id}><RpgImage src={character.imageUrl} alt={character.name} className="sidebarAvatar" fallback="◇" /><span><strong>{character.name || 'Sem nome'}</strong><small>{race?.name || 'Raça'} · {characterClass?.name || 'Classe'} · Nível {character.level}</small></span></article>;
+        })}</div>}
       </aside>
 
       <section className="workspace">
@@ -229,14 +278,48 @@ export default function Home() {
 
         {saving && <div className="savingBar">Salvando ficha...</div>}
         {view === 'catalog' && <CatalogView catalog={catalog} />}
-        {view === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} />}
+        {view === 'admin' && session.user?.role === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} />}
         {view === 'wizard' && draft && <CharacterWizard initial={draft} catalog={catalog} onSave={persistDraft} onCancel={() => { setDraft(null); setView('sheet'); }} requestRoll={requestRoll} />}
         {view === 'sheet' && selected && <CharacterSheet character={selected} catalog={catalog} onEdit={beginEdit} onUpdate={updateCharacter} requestRoll={requestRoll} />}
-        {view === 'sheet' && !selected && !loading && <CharacterChooser characters={characters} catalog={catalog} onSelect={setSelectedId} onCreate={beginCreate} />}
+        {view === 'sheet' && !selected && !loading && <CharacterChooser characters={characters} publicCharacters={publicCharacters} catalog={catalog} onSelect={setSelectedId} onCreate={beginCreate} />}
       </section>
       <DiceModal request={diceRequest} onClose={closeRoll} />
     </main>
   );
+}
+
+function AuthView({ loading, error, onAuth }) {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [password, setPassword] = useState('');
+  const [token, setToken] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setMessage('');
+    try {
+      if (mode === 'forgot') {
+        const result = await requestPasswordReset(email);
+        setMessage(result.resetToken ? `Token de recuperação: ${result.resetToken}` : 'Se o email existir, enviaremos as instruções de recuperação.');
+        return;
+      }
+      if (mode === 'reset') {
+        await resetPassword({ token, password });
+        setMessage('Senha atualizada. Entre com a nova senha.');
+        setMode('login');
+        setPassword('');
+        setToken('');
+        return;
+      }
+      await onAuth(mode, { email, password, displayName });
+    } catch (reason) {
+      setMessage(reason.message || 'Não foi possível concluir a ação.');
+    }
+  }
+
+  return <main className="authShell"><section className="authPanel"><div className="brandBlock authBrand"><div className="sigil">20</div><div><h1>RPG Manager</h1><span>Fichas inteligentes</span></div></div><div><span className="eyebrow">Acesso</span><h2>{mode === 'register' ? 'Criar conta' : mode === 'forgot' ? 'Recuperar senha' : mode === 'reset' ? 'Nova senha' : 'Entrar'}</h2><p>Entre para gerenciar suas fichas. Outros jogadores verão somente o resumo público das fichas não privadas.</p></div><form className="authForm" onSubmit={submit}>{mode !== 'reset' && <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}{mode === 'register' && <label>Nome de exibição<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>}{mode === 'reset' && <label>Token de recuperação<input value={token} onChange={(event) => setToken(event.target.value)} required /></label>}{mode !== 'forgot' && <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /></label>}<button className="primaryButton" disabled={loading} type="submit">{loading ? 'Aguarde...' : mode === 'register' ? 'Cadastrar' : mode === 'forgot' ? 'Solicitar recuperação' : mode === 'reset' ? 'Trocar senha' : 'Entrar'}</button></form>{error && <p className="validationError">{error}</p>}{message && <p className="noticeText">{message}</p>}<div className="authSwitch"><button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Criar uma conta' : 'Já tenho conta'}</button><button onClick={() => setMode('forgot')}>Esqueci a senha</button><button onClick={() => setMode('reset')}>Tenho token</button></div></section></main>;
 }
 
 function QuickDice({ requestRoll }) {
@@ -245,6 +328,6 @@ function QuickDice({ requestRoll }) {
   return <div className="quickDice"><select value={sides} onChange={(e) => setSides(Number(e.target.value))}>{[4, 6, 8, 10, 12, 20, 100].map((value) => <option key={value} value={value}>d{value}</option>)}</select><button className="dieButton" title={`Rolar d${sides}`} onClick={() => requestRoll({ characterId: '', type: 'general', name: `Rolagem d${sides}`, sides, modifiers: [], penalties: 0, origin: 'global' }, setLast)}>{last?.finalResult ?? sides}</button><span>{last ? `${last.die}: ${last.finalResult}` : 'Rolar'}</span></div>;
 }
 
-function CharacterChooser({ characters, catalog, onSelect, onCreate }) {
-  return <section className="characterChooser"><div className="chooserHeader"><div><span className="eyebrow">INICIAR SESSÃO</span><h3>Escolha um personagem</h3><p>Abra uma ficha existente ou comece uma nova jornada.</p></div><button className="primaryButton" onClick={onCreate}><Plus aria-hidden="true" />Criar personagem</button></div>{characters.length ? <div className="chooserGrid">{characters.map((character) => { const race = findEntry(catalog, character.raceId), characterClass = findEntry(catalog, character.classId); return <button key={character.id} className="chooserCharacter" onClick={() => onSelect(character.id)}><RpgImage src={character.imageUrl} alt={character.name} className="chooserPortrait" fallback="◇" /><span><strong>{character.name || 'Sem nome'}</strong><small>{race?.name || 'Raça indisponível'} · {characterClass?.name || 'Classe indisponível'}</small><small>Nível {character.level} · Vida {character.currentHp}/{character.maxHp}</small></span></button>; })}</div> : <div className="emptyState"><div className="emptyIcon">d20</div><h3>Nenhum personagem criado</h3><p>Crie sua primeira ficha usando o catálogo oficial.</p></div>}</section>;
+function CharacterChooser({ characters, publicCharacters = [], catalog, onSelect, onCreate }) {
+  return <section className="characterChooser"><div className="chooserHeader"><div><span className="eyebrow">INICIAR SESSÃO</span><h3>Escolha um personagem</h3><p>Abra uma ficha sua ou veja o resumo público de outros jogadores.</p></div><button className="primaryButton" onClick={onCreate}><Plus aria-hidden="true" />Criar personagem</button></div>{characters.length ? <div className="chooserGrid">{characters.map((character) => { const race = findEntry(catalog, character.raceId), characterClass = findEntry(catalog, character.classId); return <button key={character.id} className="chooserCharacter" onClick={() => onSelect(character.id)}><RpgImage src={character.imageUrl} alt={character.name} className="chooserPortrait" fallback="◇" /><span><strong>{character.name || 'Sem nome'}</strong><small>{race?.name || 'Raça indisponível'} · {characterClass?.name || 'Classe indisponível'}</small><small>Nível {character.level} · Vida {character.currentHp}/{character.maxHp}</small></span></button>; })}</div> : <div className="emptyState"><div className="emptyIcon">d20</div><h3>Nenhum personagem criado</h3><p>Crie sua primeira ficha usando o catálogo oficial.</p></div>}{!!publicCharacters.length && <section className="publicChooser"><h3>Fichas públicas</h3><div className="chooserGrid">{publicCharacters.map((character) => { const race = findEntry(catalog, character.raceId), characterClass = findEntry(catalog, character.classId); return <article key={character.id} className="chooserCharacter summaryOnly"><RpgImage src={character.imageUrl} alt={character.name} className="chooserPortrait" fallback="◇" /><span><strong>{character.name || 'Sem nome'}</strong><small>{race?.name || 'Raça indisponível'} · {characterClass?.name || 'Classe indisponível'}</small><small>Nível {character.level}{character.ownerName ? ` · ${character.ownerName}` : ''}</small></span></article>; })}</div></section>}</section>;
 }

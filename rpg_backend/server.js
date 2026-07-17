@@ -2,15 +2,27 @@ import http from 'node:http';
 import fs from 'node:fs';
 
 import {
+  createPasswordReset,
+  loginUser,
+  logoutToken,
+  publicUser,
+  registerUser,
+  resetPassword,
+  userFromBearerHeader,
+} from './lib/authStore.js';
+import {
   deleteCatalogEntryById,
-  deleteCharacterFromDatabase,
   ensureCatalogCategories,
-  getCharacterFromDatabase,
+  getCharacterForUserFromDatabase,
+  getCharacterOwnershipFromDatabase,
   insertCatalogEntry,
-  listCharactersFromDatabase,
+  listOwnedCharactersFromDatabase,
+  listPublicCharacterSummariesFromDatabase,
   loadCatalogFromDatabase,
   metadataFromDescription,
+  normalizeVisibility,
   saveCharacterToDatabase,
+  deleteCharacterForUserFromDatabase,
   updateCatalogEntryById,
 } from './lib/catalogStore.js';
 
@@ -39,7 +51,46 @@ export async function requestHandler(req, res) {
       return sendJson(res, 200, { ok: true, backend: 'rpg-backend', storage: 'postgres' });
     }
 
+    if (req.method === 'POST' && path === '/auth/register') {
+      const body = await readJson(req);
+      const auth = await registerUser(body);
+      return sendJson(res, 201, { ok: true, user: publicUser(auth.user), token: auth.token, expiresAt: auth.expiresAt });
+    }
+
+    if (req.method === 'POST' && path === '/auth/login') {
+      const body = await readJson(req);
+      const auth = await loginUser(body);
+      return sendJson(res, 200, { ok: true, user: publicUser(auth.user), token: auth.token, expiresAt: auth.expiresAt });
+    }
+
+    if (req.method === 'GET' && path === '/auth/me') {
+      const user = await currentUser(req);
+      return sendJson(res, 200, { ok: true, user: publicUser(user) });
+    }
+
+    if (req.method === 'POST' && path === '/auth/logout') {
+      await logoutToken(req.headers.authorization);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && path === '/auth/password/request') {
+      const body = await readJson(req);
+      const reset = await createPasswordReset(body);
+      return sendJson(res, 200, {
+        ok: true,
+        delivered: reset.delivered,
+        ...(reset.resetToken ? { resetToken: reset.resetToken, resetUrl: reset.resetUrl } : {}),
+      });
+    }
+
+    if (req.method === 'POST' && path === '/auth/password/reset') {
+      const body = await readJson(req);
+      await resetPassword(body);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (req.method === 'POST' && path === '/setup') {
+      await requireAdmin(req);
       await setupDatabaseCatalogs();
       return sendJson(res, 200, { ok: true });
     }
@@ -50,12 +101,14 @@ export async function requestHandler(req, res) {
     }
 
     if (req.method === 'POST' && path === '/catalog/items') {
+      await requireAdmin(req);
       const body = await readJson(req);
       const item = await createCatalogEntry('item', body.item);
       return sendJson(res, 201, { ok: true, item });
     }
 
     if (req.method === 'POST' && path === '/catalog/spells') {
+      await requireAdmin(req);
       const body = await readJson(req);
       const spell = await createCatalogEntry('spell', body.spell);
       return sendJson(res, 201, { ok: true, spell });
@@ -63,6 +116,7 @@ export async function requestHandler(req, res) {
 
     const catalogMatch = path.match(/^\/catalog\/(items|spells)\/([^/]+)$/);
     if (catalogMatch && req.method === 'PUT') {
+      await requireAdmin(req);
       const kind = catalogMatch[1] === 'spells' ? 'spell' : 'item';
       const body = await readJson(req);
       const entry = await updateCatalogEntry(
@@ -74,24 +128,34 @@ export async function requestHandler(req, res) {
     }
 
     if (catalogMatch && req.method === 'DELETE') {
+      await requireAdmin(req);
       const kind = catalogMatch[1] === 'spells' ? 'spell' : 'item';
       await deleteCatalogEntry(kind, decodeURIComponent(catalogMatch[2]));
       return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === 'GET' && path === '/characters') {
-      return sendJson(res, 200, { ok: true, characters: await listCharacters() });
+      const user = await requireUser(req);
+      const result = await listCharacters(user);
+      return sendJson(res, 200, { ok: true, ...result });
+    }
+
+    if (req.method === 'GET' && path === '/characters/public') {
+      const user = await currentUser(req);
+      return sendJson(res, 200, { ok: true, characters: await listPublicCharacterSummariesFromDatabase(user?.id || '') });
     }
 
     const characterMatch = path.match(/^\/characters\/([^/]+)$/);
     if (characterMatch && req.method === 'GET') {
-      const character = await getCharacter(decodeURIComponent(characterMatch[1]));
+      const user = await requireUser(req);
+      const character = await getCharacter(decodeURIComponent(characterMatch[1]), user);
       return sendJson(res, 200, { ok: true, character });
     }
 
     if (req.method === 'POST' && path === '/characters') {
+      const user = await requireUser(req);
       const body = await readJson(req);
-      const character = await saveCharacter(body.character, {
+      const character = await saveCharacter(body.character, user, {
         baseRevision: body.baseRevision,
         changedFields: body.changedFields,
       });
@@ -99,7 +163,8 @@ export async function requestHandler(req, res) {
     }
 
     if (characterMatch && req.method === 'DELETE') {
-      await deleteCharacter(decodeURIComponent(characterMatch[1]));
+      const user = await requireUser(req);
+      await deleteCharacter(decodeURIComponent(characterMatch[1]), user);
       return sendJson(res, 200, { ok: true });
     }
 
@@ -140,7 +205,7 @@ function loadDotEnv() {
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Cache-Control', 'no-store');
 }
 
@@ -167,6 +232,22 @@ class AppError extends Error {
     this.statusCode = statusCode;
     this.details = details;
   }
+}
+
+async function currentUser(req) {
+  return userFromBearerHeader(req.headers.authorization);
+}
+
+async function requireUser(req) {
+  const user = await currentUser(req);
+  if (!user) throw new AppError('Faça login para continuar.', 401);
+  return user;
+}
+
+async function requireAdmin(req) {
+  const user = await requireUser(req);
+  if (user.role !== 'admin') throw new AppError('Apenas o Mestre pode gerenciar esta área.', 403);
+  return user;
 }
 
 async function setupDatabaseCatalogs() {
@@ -351,33 +432,46 @@ function spellDefinition(raw) {
   };
 }
 
-async function listCharacters() {
-  return listCharactersFromDatabase();
+async function listCharacters(user) {
+  return {
+    characters: await listOwnedCharactersFromDatabase(user.id),
+    publicCharacters: await listPublicCharacterSummariesFromDatabase(user.id),
+  };
 }
 
-async function getCharacter(id) {
-  return getCharacterFromDatabase(id);
+async function getCharacter(id, user) {
+  return getCharacterForUserFromDatabase(id, user.id);
 }
 
-async function saveCharacter(character, options = {}) {
+async function saveCharacter(character, user, options = {}) {
   if (!character || !character.id) throw new AppError('Personagem sem id.', 400);
   return enqueueCharacterWrite(character.id, async () => {
-    const current = await getCharacterFromDatabase(character.id);
+    const ownership = await getCharacterOwnershipFromDatabase(character.id);
+    if (ownership?.owner_user_id && ownership.owner_user_id !== user.id) {
+      throw new AppError('Você só pode alterar fichas criadas por você.', 403);
+    }
+    const current = ownership?.owner_user_id === user.id
+      ? await getCharacterForUserFromDatabase(character.id, user.id)
+      : null;
     const merged = mergeCharacterUpdate(current, character, options.changedFields);
     const currentRevision = Number(current?.syncRevision || 0);
     const incomingRevision = Number(character.syncRevision || options.baseRevision || 0);
     const persisted = prepareCharacterForStorage({
       ...merged,
       id: character.id,
+      ownerUserId: user.id,
+      visibility: normalizeVisibility(character.visibility || merged.visibility),
+      isPrivate: normalizeVisibility(character.visibility || merged.visibility) === 'private',
       syncRevision: Math.max(currentRevision, incomingRevision) + 1,
       updatedAt: new Date().toISOString(),
     });
-    return saveCharacterToDatabase(persisted, options.changedFields || []);
+    return saveCharacterToDatabase(persisted, options.changedFields || [], user.id);
   });
 }
 
-async function deleteCharacter(id) {
-  await deleteCharacterFromDatabase(id);
+async function deleteCharacter(id, user) {
+  const deleted = await deleteCharacterForUserFromDatabase(id, user.id);
+  if (!deleted) throw new AppError('Ficha não encontrada nas suas fichas.', 404);
 }
 
 function enqueueCharacterWrite(characterId, task) {
@@ -420,6 +514,8 @@ export function prepareCharacterForStorage(raw) {
   character.actionHistory = compactHistory(character.actionHistory, 200);
   character.inventory = compactInventory(character.inventory);
   character.equipment = compactInventory(character.equipment);
+  character.visibility = normalizeVisibility(character.visibility || character.isPrivate);
+  character.isPrivate = character.visibility === 'private';
   return character;
 }
 

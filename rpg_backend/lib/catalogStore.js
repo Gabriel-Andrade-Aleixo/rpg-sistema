@@ -261,6 +261,31 @@ export async function listCharactersFromDatabase() {
   return result.rows.map((row) => row.data).filter(Boolean);
 }
 
+export async function listOwnedCharactersFromDatabase(userId) {
+  const result = await query(
+    `SELECT data
+     FROM characters
+     WHERE deleted_at IS NULL AND owner_user_id = $1
+     ORDER BY updated_at DESC, name`,
+    [userId],
+  );
+  return result.rows.map((row) => row.data).filter(Boolean);
+}
+
+export async function listPublicCharacterSummariesFromDatabase(userId = '') {
+  const result = await query(
+    `SELECT c.summary, c.data, c.owner_user_id, u.display_name AS owner_name
+     FROM characters c
+     LEFT JOIN rpg_users u ON u.id = c.owner_user_id
+     WHERE c.deleted_at IS NULL
+       AND c.visibility = 'public'
+       AND ($1::uuid IS NULL OR c.owner_user_id IS NULL OR c.owner_user_id <> $1::uuid)
+     ORDER BY c.updated_at DESC, c.name`,
+    [userId || null],
+  );
+  return result.rows.map((row) => publicCharacterSummary(row.data, row.summary, row.owner_user_id, row.owner_name));
+}
+
 export async function getCharacterFromDatabase(id) {
   const result = await query(
     'SELECT data FROM characters WHERE id = $1 AND deleted_at IS NULL',
@@ -269,20 +294,58 @@ export async function getCharacterFromDatabase(id) {
   return result.rows[0]?.data || null;
 }
 
-export async function saveCharacterToDatabase(character, changedFields = []) {
+export async function getCharacterForUserFromDatabase(id, userId) {
+  const result = await query(
+    `SELECT c.data, c.summary, c.owner_user_id, c.visibility, u.display_name AS owner_name
+     FROM characters c
+     LEFT JOIN rpg_users u ON u.id = c.owner_user_id
+     WHERE c.id = $1 AND c.deleted_at IS NULL`,
+    [id],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  if (row.owner_user_id && row.owner_user_id === userId) return row.data;
+  if (row.visibility === 'public') {
+    return publicCharacterSummary(row.data, row.summary, row.owner_user_id, row.owner_name);
+  }
+  return null;
+}
+
+export async function getCharacterOwnershipFromDatabase(id) {
+  const result = await query(
+    'SELECT owner_user_id, visibility FROM characters WHERE id = $1 AND deleted_at IS NULL',
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+export async function saveCharacterToDatabase(character, changedFields = [], ownerUserId = null) {
   return transaction(async (client) => {
+    const current = await client.query(
+      'SELECT owner_user_id FROM characters WHERE id = $1 AND deleted_at IS NULL',
+      [character.id],
+    );
+    const currentOwner = current.rows[0]?.owner_user_id || null;
+    const nextOwner = currentOwner || ownerUserId || null;
+    const visibility = normalizeVisibility(character.visibility);
+    const summary = characterSummary(character, nextOwner);
     const result = await client.query(
-      `INSERT INTO characters (id, name, data, sync_revision, updated_at, deleted_at)
-       VALUES ($1, $2, $3::jsonb, $4, now(), NULL)
+      `INSERT INTO characters (id, owner_user_id, name, data, visibility, summary, sync_revision, updated_at, deleted_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, now(), NULL)
        ON CONFLICT (id)
-       DO UPDATE SET name = EXCLUDED.name, data = EXCLUDED.data,
+       DO UPDATE SET owner_user_id = coalesce(characters.owner_user_id, EXCLUDED.owner_user_id),
+                     name = EXCLUDED.name, data = EXCLUDED.data,
+                     visibility = EXCLUDED.visibility, summary = EXCLUDED.summary,
                      sync_revision = EXCLUDED.sync_revision, updated_at = now(),
                      deleted_at = NULL
        RETURNING data`,
       [
         character.id,
+        nextOwner,
         character.name || 'Personagem sem nome',
         JSON.stringify(character),
+        visibility,
+        JSON.stringify(summary),
         Number(character.syncRevision || 0),
       ],
     );
@@ -307,6 +370,58 @@ export async function deleteCharacterFromDatabase(id) {
   );
 }
 
+export async function deleteCharacterForUserFromDatabase(id, userId) {
+  const result = await query(
+    `UPDATE characters
+     SET deleted_at = now(), updated_at = now()
+     WHERE id = $1 AND owner_user_id = $2 AND deleted_at IS NULL`,
+    [id, userId],
+  );
+  return result.rowCount > 0;
+}
+
+export function characterSummary(character, ownerUserId = null) {
+  const data = character && typeof character === 'object' ? character : {};
+  const visibility = normalizeVisibility(data.visibility);
+  return {
+    id: String(data.id || ''),
+    name: String(data.name || 'Personagem sem nome').slice(0, 120),
+    playerName: String(data.playerName || '').slice(0, 120),
+    raceId: String(data.raceId || ''),
+    raceVariant: String(data.raceVariant || ''),
+    classId: String(data.classId || ''),
+    level: Number(data.level || 1),
+    imageUrl: String(data.imageUrl || ''),
+    visibility,
+    isPrivate: visibility === 'private',
+    ownerUserId: ownerUserId || data.ownerUserId || '',
+    access: 'summary',
+    updatedAt: data.updatedAt || null,
+  };
+}
+
+export function publicCharacterSummary(data, storedSummary = {}, ownerUserId = null, ownerName = '') {
+  const summary = {
+    ...characterSummary(data, ownerUserId),
+    ...(storedSummary && typeof storedSummary === 'object' ? storedSummary : {}),
+  };
+  return {
+    id: summary.id,
+    name: summary.name,
+    playerName: summary.playerName,
+    raceId: summary.raceId,
+    raceVariant: summary.raceVariant,
+    classId: summary.classId,
+    level: summary.level,
+    imageUrl: summary.imageUrl,
+    visibility: 'public',
+    isPrivate: false,
+    ownerName: ownerName || '',
+    access: 'summary',
+    updatedAt: summary.updatedAt || null,
+  };
+}
+
 export function metadataFromDescription(description) {
   const match = String(description || '').match(
     /<!-- RPG_RULES_JSON_START -->([\s\S]*?)<!-- RPG_RULES_JSON_END -->/,
@@ -328,6 +443,13 @@ export function replaceMetadataBlock(description, metadata) {
 
 export function normalizeText(value) {
   return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+export function normalizeVisibility(value) {
+  if (value === true || normalizeText(value) === 'private' || normalizeText(value) === 'privada') {
+    return 'private';
+  }
+  return 'public';
 }
 
 function normalizeEntryPayload(entry) {

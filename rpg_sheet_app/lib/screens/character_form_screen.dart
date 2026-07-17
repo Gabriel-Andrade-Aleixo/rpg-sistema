@@ -257,6 +257,27 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
         controller: _player,
         decoration: const InputDecoration(labelText: 'Nome do jogador'),
       ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        initialValue: _character.visibility,
+        decoration: const InputDecoration(labelText: 'Privacidade'),
+        items: const [
+          DropdownMenuItem(
+            value: 'public',
+            child: Text('Pública: outros veem somente o resumo'),
+          ),
+          DropdownMenuItem(
+            value: 'private',
+            child: Text('Privada: somente você vê'),
+          ),
+        ],
+        onChanged: (value) => _update(
+          (character) => character.copyWith(
+            visibility: value ?? 'public',
+            isPrivate: value == 'private',
+          ),
+        ),
+      ),
     ],
   );
 
@@ -708,6 +729,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
         ),
         Text('Raça: ${_race?.entry.name ?? 'não selecionada'}'),
         Text('Classe: ${_characterClass?.entry.name ?? 'não selecionada'}'),
+        Text(_character.isPrivate ? 'Ficha privada' : 'Resumo público ativo'),
         Text('Vida: ${_character.currentHp}/${_character.maxHp}'),
         Text('Equipamentos: ${_character.equipment.length}'),
         const SizedBox(height: 12),

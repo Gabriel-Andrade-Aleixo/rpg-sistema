@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rpg_sheet_app/main.dart';
+import 'package:rpg_sheet_app/repositories/auth_repository.dart';
 import 'package:rpg_sheet_app/repositories/character_repository.dart';
 import 'package:rpg_sheet_app/services/backend_api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +15,7 @@ void main() {
 
     await tester.pumpWidget(
       RpgSheetApp(
+        authRepository: AuthRepository(BackendApiService(baseUrl: '')),
         repository: repository,
         catalogRepository: CatalogRepository(BackendApiService(baseUrl: '')),
       ),
@@ -22,6 +24,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('RPG Manager'), findsOneWidget);
-    expect(find.text('Nenhum personagem criado'), findsOneWidget);
+    expect(find.text('Entrar'), findsWidgets);
   });
 }

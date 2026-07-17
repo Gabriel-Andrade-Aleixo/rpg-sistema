@@ -83,6 +83,8 @@ export function migrateCharacter(raw, catalog) {
   character.raceId = resolveLegacyId(character.raceId, catalogGroups(catalog).races);
   character.classId = resolveLegacyId(character.classId, catalogGroups(catalog).classes);
   character.hpProgressionMode = raw.hpProgressionMode || 'fixed';
+  character.visibility = raw.visibility === 'private' || raw.isPrivate ? 'private' : 'public';
+  character.isPrivate = character.visibility === 'private';
   character.maxHp = Number(raw.maxHp ?? raw.resources?.hpMax ?? 0);
   character.currentHp = Number(raw.currentHp ?? raw.resources?.hpCurrent ?? character.maxHp);
   character.maxMana = Number(raw.maxMana ?? raw.resources?.manaMax ?? 0);

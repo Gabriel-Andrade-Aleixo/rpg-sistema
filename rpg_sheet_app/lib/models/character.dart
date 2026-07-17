@@ -139,6 +139,8 @@ class Character {
     required this.raceId,
     this.raceVariant = '',
     required this.classId,
+    this.visibility = 'public',
+    bool? isPrivate,
     this.level = 1,
     this.background = '',
     this.lore = '',
@@ -177,7 +179,8 @@ class Character {
     this.syncRevision = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : attributes = attributes ?? _defaultAttributes(),
+  }) : isPrivate = isPrivate ?? visibility == 'private',
+       attributes = attributes ?? _defaultAttributes(),
        skillBonuses = skillBonuses ?? {},
        resources = {..._defaultResources(), ...?resources},
        currency = currency ?? const Currency(),
@@ -207,6 +210,8 @@ class Character {
   final String raceId;
   final String raceVariant;
   final String classId;
+  final String visibility;
+  final bool isPrivate;
   final int level;
   final String background;
   final String lore;
@@ -270,6 +275,8 @@ class Character {
     'raceId': raceId,
     'raceVariant': raceVariant,
     'classId': classId,
+    'visibility': visibility,
+    'isPrivate': isPrivate,
     'level': level,
     'background': background,
     'lore': lore,
@@ -325,6 +332,11 @@ class Character {
       raceId: json['raceId']?.toString() ?? 'human',
       raceVariant: json['raceVariant']?.toString() ?? '',
       classId: json['classId']?.toString() ?? 'barbarian',
+      visibility: json['visibility']?.toString() == 'private'
+          ? 'private'
+          : 'public',
+      isPrivate:
+          json['isPrivate'] == true || json['visibility']?.toString() == 'private',
       level: (json['level'] as num?)?.toInt() ?? 1,
       background: json['background']?.toString() ?? '',
       lore: json['lore']?.toString() ?? '',
@@ -461,6 +473,8 @@ class Character {
     String? raceId,
     String? raceVariant,
     String? classId,
+    String? visibility,
+    bool? isPrivate,
     int? level,
     String? background,
     String? lore,
@@ -506,6 +520,8 @@ class Character {
     raceId: raceId ?? this.raceId,
     raceVariant: raceVariant ?? this.raceVariant,
     classId: classId ?? this.classId,
+    visibility: visibility ?? this.visibility,
+    isPrivate: isPrivate ?? this.isPrivate,
     level: level ?? this.level,
     background: background ?? this.background,
     lore: lore ?? this.lore,

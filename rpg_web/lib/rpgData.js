@@ -19,6 +19,8 @@ export function emptyCharacter() {
     raceId: '',
     raceVariant: '',
     classId: '',
+    visibility: 'public',
+    isPrivate: false,
     hpProgressionMode: 'fixed',
     level: 1,
     background: '',

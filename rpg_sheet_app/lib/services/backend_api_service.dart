@@ -11,11 +11,66 @@ class BackendApiService {
 
   final String baseUrl;
   final http.Client _client;
+  String _authToken = '';
 
   bool get isConfigured => baseUrl.trim().isNotEmpty;
 
+  void setAuthToken(String token) {
+    _authToken = token;
+  }
+
   Future<void> setupRemote() async {
     await _post('/setup', {});
+  }
+
+  Future<Map<String, dynamic>> register({
+    required String email,
+    required String password,
+    required String displayName,
+  }) async {
+    final data = await _post('/auth/register', {
+      'email': email,
+      'password': password,
+      'displayName': displayName,
+    });
+    _authToken = data['token']?.toString() ?? '';
+    return data;
+  }
+
+  Future<Map<String, dynamic>> login({
+    required String email,
+    required String password,
+  }) async {
+    final data = await _post('/auth/login', {
+      'email': email,
+      'password': password,
+    });
+    _authToken = data['token']?.toString() ?? '';
+    return data;
+  }
+
+  Future<void> logout() async {
+    if (_authToken.isNotEmpty) {
+      try {
+        await _post('/auth/logout', {});
+      } catch (_) {
+        // A sessão local ainda deve ser limpa.
+      }
+    }
+    _authToken = '';
+  }
+
+  Future<Map<String, dynamic>> requestPasswordReset(String email) =>
+      _post('/auth/password/request', {'email': email});
+
+  Future<void> resetPassword({
+    required String token,
+    required String password,
+  }) async {
+    await _post('/auth/password/reset', {
+      'token': token,
+      'password': password,
+    });
   }
 
   Future<OfficialCatalog> loadCatalog({bool refresh = false}) async {
@@ -73,6 +128,15 @@ class BackendApiService {
         .toList();
   }
 
+  Future<List<Character>> listPublicCharacters() async {
+    final data = await _get('/characters');
+    final characters = (data['publicCharacters'] as List?) ?? [];
+    return characters
+        .whereType<Map>()
+        .map((json) => Character.fromJson(Map<String, dynamic>.from(json)))
+        .toList();
+  }
+
   Future<Character?> getCharacter(String id) async {
     final data = await _get('/characters/${Uri.encodeComponent(id)}');
     final character = data['character'];
@@ -104,7 +168,7 @@ class BackendApiService {
 
   Future<Map<String, dynamic>> _get(String path) async {
     final response = await _client
-        .get(_uri(path))
+        .get(_uri(path), headers: _headers())
         .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
@@ -116,7 +180,7 @@ class BackendApiService {
     final response = await _client
         .post(
           _uri(path),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headers(),
           body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 25));
@@ -125,7 +189,7 @@ class BackendApiService {
 
   Future<Map<String, dynamic>> _delete(String path) async {
     final response = await _client
-        .delete(_uri(path))
+        .delete(_uri(path), headers: _headers())
         .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
@@ -137,7 +201,7 @@ class BackendApiService {
     final response = await _client
         .put(
           _uri(path),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headers(),
           body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 25));
@@ -150,6 +214,11 @@ class BackendApiService {
         : baseUrl;
     return Uri.parse('$trimmed$path');
   }
+
+  Map<String, String> _headers() => {
+    'Content-Type': 'application/json',
+    if (_authToken.isNotEmpty) 'Authorization': 'Bearer $_authToken',
+  };
 
   Map<String, dynamic> _decode(http.Response response) {
     dynamic data;

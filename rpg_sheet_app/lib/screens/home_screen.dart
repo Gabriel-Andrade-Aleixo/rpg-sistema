@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../models/catalog_models.dart';
 import '../models/character.dart';
+import '../models/auth_session.dart';
 import '../presentation/screens/admin/admin_screen.dart';
 import '../presentation/screens/catalog/catalog_screen.dart';
 import '../presentation/widgets/rpg_image.dart';
 import '../repositories/catalog_repository.dart';
 import '../repositories/character_repository.dart';
+import '../repositories/auth_repository.dart';
 import '../utils/id_generator.dart';
 import '../widgets/dice_roller.dart';
 import 'character_detail_screen.dart';
@@ -17,12 +19,18 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.catalogRepository,
+    required this.authRepository,
+    required this.session,
+    required this.onLogout,
     required this.themeMode,
     required this.onToggleTheme,
   });
 
   final CharacterRepository repository;
   final CatalogRepository catalogRepository;
+  final AuthRepository authRepository;
+  final AuthSession session;
+  final Future<void> Function() onLogout;
   final ThemeMode themeMode;
   final VoidCallback onToggleTheme;
 
@@ -33,11 +41,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeData {
   const _HomeData({
     required this.characters,
+    required this.publicCharacters,
     required this.catalog,
     this.catalogError,
   });
 
   final List<Character> characters;
+  final List<Character> publicCharacters;
   final OfficialCatalog catalog;
   final Object? catalogError;
 }
@@ -59,14 +69,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<_HomeData> _load({bool refreshCatalog = false}) async {
     await widget.repository.setupRemote();
     final characters = await widget.repository.listCharacters();
+    final publicCharacters = await widget.repository.listPublicCharacters();
     try {
       final catalog = await widget.catalogRepository.load(
         refresh: refreshCatalog,
       );
-      return _HomeData(characters: characters, catalog: catalog);
+      return _HomeData(
+        characters: characters,
+        publicCharacters: publicCharacters,
+        catalog: catalog,
+      );
     } catch (error) {
       return _HomeData(
         characters: characters,
+        publicCharacters: publicCharacters,
         catalog: const OfficialCatalog(entries: []),
         catalogError: error,
       );
@@ -184,8 +200,22 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: const Icon(Icons.more_vert),
               onSelected: (value) {
                 if (value == 'theme') widget.onToggleTheme();
+                if (value == 'logout') widget.onLogout();
               },
               itemBuilder: (_) => [
+                PopupMenuItem(
+                  enabled: false,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.account_circle_outlined),
+                    title: Text(
+                      widget.session.displayName.isEmpty
+                          ? widget.session.email
+                          : widget.session.displayName,
+                    ),
+                    subtitle: Text(widget.session.isAdmin ? 'Mestre' : 'Jogador'),
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'theme',
                   child: ListTile(
@@ -200,6 +230,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? 'Tema claro'
                           : 'Tema escuro',
                     ),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.logout),
+                    title: Text('Sair'),
                   ),
                 ),
               ],
@@ -256,6 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return CatalogScreen(catalog: data.catalog, embedded: true);
     }
     if (_destination == 2) {
+      if (!widget.session.isAdmin) {
+        return const Center(
+          child: Text('Apenas o Mestre pode gerenciar o catálogo oficial.'),
+        );
+      }
       return AdminScreen(
         catalog: data.catalog,
         characters: data.characters,
@@ -291,12 +334,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-        Expanded(child: data.characters.isEmpty ? _empty() : _characters(data)),
+        Expanded(child: data.characters.isEmpty ? _empty(data) : _characters(data)),
       ],
     );
   }
 
-  Widget _empty() => Center(
+  Widget _empty(_HomeData data) => Center(
     child: SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: ConstrainedBox(
@@ -336,6 +379,31 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               textAlign: TextAlign.center,
             ),
+            if (data.publicCharacters.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text(
+                'Fichas públicas',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              ...data.publicCharacters.take(4).map(
+                (character) => ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: RpgImage(
+                      url: character.imageUrl,
+                      width: 46,
+                      height: 46,
+                      icon: Icons.person_outline,
+                    ),
+                  ),
+                  title: Text(character.name),
+                  subtitle: Text(
+                    '${data.catalog.findById(character.raceId)?.name ?? 'Raça'} · ${data.catalog.findById(character.classId)?.name ?? 'Classe'} · Nível ${character.level}',
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -351,6 +419,8 @@ class _HomeScreenState extends State<HomeScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverToBoxAdapter(child: _Overview(data: data)),
+        if (data.publicCharacters.isNotEmpty)
+          SliverToBoxAdapter(child: _PublicCharacters(data: data)),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
           sliver: SliverLayoutBuilder(
@@ -468,7 +538,66 @@ class _Overview extends StatelessWidget {
         ),
         _CountBadge(label: '${data.characters.length} fichas'),
         const SizedBox(width: 6),
-        _CountBadge(label: '${data.catalog.entries.length} cartões'),
+        _CountBadge(label: '${data.publicCharacters.length} públicas'),
+      ],
+    ),
+  );
+}
+
+class _PublicCharacters extends StatelessWidget {
+  const _PublicCharacters({required this.data});
+
+  final _HomeData data;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Fichas públicas', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 96,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: data.publicCharacters.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final character = data.publicCharacters[index];
+              final race =
+                  data.catalog.findById(character.raceId)?.name ?? 'Raça';
+              final characterClass =
+                  data.catalog.findById(character.classId)?.name ?? 'Classe';
+              return SizedBox(
+                width: 260,
+                child: Card(
+                  child: ListTile(
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: RpgImage(
+                        url: character.imageUrl,
+                        width: 52,
+                        height: 52,
+                        icon: Icons.person_outline,
+                      ),
+                    ),
+                    title: Text(
+                      character.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '$race · $characterClass · Nível ${character.level}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ],
     ),
   );
@@ -546,7 +675,7 @@ class _CharacterCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$race · $characterClass',
+                      '$race · $characterClass${character.isPrivate ? ' · privada' : ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,

@@ -39,6 +39,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .appShell { display: grid; grid-template-columns: 316px minmax(0, 1fr); min-height: 100vh; }
+.authShell { display: grid; place-items: center; min-height: 100vh; padding: 22px; }
+.authPanel { display: grid; gap: 18px; width: min(100%, 460px); padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
+.authBrand { margin-bottom: 0; }
+.authPanel h2 { margin: 3px 0 0; font-size: 28px; }
+.authPanel p { margin: 0; color: var(--muted); line-height: 1.5; }
+.authForm { display: grid; gap: 12px; }
+.authSwitch { display: flex; flex-wrap: wrap; gap: 8px; }
+.authSwitch button { min-height: 34px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--ink); padding: 7px 10px; font-weight: 700; }
 .sidebar { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 20px; border-right: 1px solid var(--line); background: var(--sidebar); }
 .brandBlock { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .brandBlock h1 { margin: 0; font-size: 22px; }
@@ -64,6 +72,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mainNav svg { width: 16px; height: 16px; }
 .mainNav button.active { background: var(--surface-3); color: var(--ink); border-color: var(--gold); }
 .statusRow { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0; color: var(--muted); font-size: 12px; }
+.userBox { display: grid; grid-template-columns: 28px minmax(0, 1fr) 30px; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.userBox svg { width: 18px; height: 18px; color: var(--gold); }
+.userBox span { display: grid; min-width: 0; }
+.userBox strong, .userBox small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.userBox small { color: var(--muted); }
+.userBox button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--ink); }
 .sidebarError { border-left: 3px solid var(--danger); padding: 8px 10px; background: var(--surface); }
 .sidebarError p { margin: 0 0 7px; color: var(--danger); font-size: 13px; }
 .sidebarError button { border: 0; background: none; color: var(--ink); padding: 0; text-decoration: underline; }
@@ -82,6 +96,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .cardActions button { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; border: 0; border-right: 1px solid var(--line); border-radius: 0; padding: 5px; background: transparent; color: var(--muted); font-size: 11px; }
 .cardActions svg { width: 13px; height: 13px; }
 .cardActions button:last-child { border-right: 0; color: var(--danger); }
+.publicList { display: grid; gap: 8px; margin-top: 16px; }
+.publicCharacterCard { display: flex; align-items: center; gap: 10px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.publicCharacterCard span { display: grid; min-width: 0; gap: 3px; }
+.publicCharacterCard strong, .publicCharacterCard small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.publicCharacterCard small { color: var(--muted); }
 
 .workspace { min-width: 0; padding: 22px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 68px; margin-bottom: 18px; }
@@ -129,10 +148,14 @@ textarea { resize: vertical; }
 .chooserGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .chooserCharacter { display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 12px; min-height: 98px; padding: 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); text-align: left; }
 .chooserCharacter:hover { border-color: var(--gold); }
+.chooserCharacter.summaryOnly { cursor: default; opacity: .86; }
+.chooserCharacter.summaryOnly:hover { border-color: var(--line); }
 .chooserPortrait { width: 74px; height: 74px; border-radius: 7px; object-fit: cover; }
 .chooserCharacter span { display: grid; gap: 4px; min-width: 0; }
 .chooserCharacter strong, .chooserCharacter small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chooserCharacter small { color: var(--muted); }
+.publicChooser { margin-top: 24px; }
+.publicChooser h3 { margin: 0 0 10px; }
 .metricGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
 .metric { display: grid; gap: 4px; padding: 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); }
 .metric span { color: var(--muted); font-size: 12px; }
@@ -442,7 +465,7 @@ textarea { resize: vertical; }
 @media (max-width: 760px) {
   .appShell { display: block; }
   .sidebar { position: fixed; z-index: 60; inset: auto 0 0; width: 100%; height: 70px; overflow: visible; padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); border: 0; border-top: 1px solid var(--line); background: var(--sidebar); }
-  .sidebar .brandBlock, .sidebar > .primaryButton, .sidebar .statusRow, .sidebar .sidebarError, .sidebar > .muted, .sidebar .characterList { display: none; }
+  .sidebar .brandBlock, .sidebar > .primaryButton, .sidebar .statusRow, .sidebar .sidebarError, .sidebar > .muted, .sidebar .characterList, .sidebar .userBox, .sidebar .publicList { display: none; }
   .sidebar .mainNav { height: 58px; margin: 0; gap: 4px; }
   .sidebar .mainNav button { flex-direction: column; gap: 2px; min-height: 56px; padding: 5px 2px; border: 0; border-radius: 7px; font-size: 10px; }
   .sidebar .mainNav button.active { border: 0; background: var(--surface-3); color: var(--gold); }

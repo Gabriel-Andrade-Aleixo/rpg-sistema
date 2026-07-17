@@ -62,6 +62,46 @@ export async function ensureSchema() {
         updated_at timestamptz NOT NULL DEFAULT now()
       );
 
+      CREATE TABLE IF NOT EXISTS rpg_users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email text NOT NULL,
+        display_name text NOT NULL DEFAULT '',
+        password_hash text NOT NULL,
+        role text NOT NULL DEFAULT 'player',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        deleted_at timestamptz,
+        CONSTRAINT rpg_users_role_check CHECK (role IN ('player', 'admin'))
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS rpg_users_email_unique
+        ON rpg_users (lower(email))
+        WHERE deleted_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid NOT NULL REFERENCES rpg_users(id) ON DELETE CASCADE,
+        token_hash text NOT NULL UNIQUE,
+        expires_at timestamptz NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        last_seen_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS auth_sessions_user_idx
+        ON auth_sessions (user_id, expires_at DESC);
+
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid NOT NULL REFERENCES rpg_users(id) ON DELETE CASCADE,
+        token_hash text NOT NULL UNIQUE,
+        expires_at timestamptz NOT NULL,
+        used_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx
+        ON password_reset_tokens (user_id, expires_at DESC);
+
       CREATE TABLE IF NOT EXISTS catalog_categories (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         name text NOT NULL UNIQUE,
@@ -99,17 +139,33 @@ export async function ensureSchema() {
 
       CREATE TABLE IF NOT EXISTS characters (
         id text PRIMARY KEY,
+        owner_user_id uuid REFERENCES rpg_users(id) ON DELETE SET NULL,
         name text NOT NULL,
         data jsonb NOT NULL,
+        visibility text NOT NULL DEFAULT 'public',
+        summary jsonb NOT NULL DEFAULT '{}'::jsonb,
         sync_revision integer NOT NULL DEFAULT 0,
         created_at timestamptz NOT NULL DEFAULT now(),
         updated_at timestamptz NOT NULL DEFAULT now(),
-        deleted_at timestamptz
+        deleted_at timestamptz,
+        CONSTRAINT characters_visibility_check CHECK (visibility IN ('public', 'private'))
       );
+
+      ALTER TABLE characters ADD COLUMN IF NOT EXISTS owner_user_id uuid REFERENCES rpg_users(id) ON DELETE SET NULL;
+      ALTER TABLE characters ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public';
+      ALTER TABLE characters ADD COLUMN IF NOT EXISTS summary jsonb NOT NULL DEFAULT '{}'::jsonb;
 
       CREATE INDEX IF NOT EXISTS characters_active_idx
         ON characters (updated_at DESC)
         WHERE deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS characters_owner_idx
+        ON characters (owner_user_id, updated_at DESC)
+        WHERE deleted_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS characters_public_idx
+        ON characters (updated_at DESC)
+        WHERE deleted_at IS NULL AND visibility = 'public';
 
       CREATE TABLE IF NOT EXISTS character_revisions (
         id bigserial PRIMARY KEY,

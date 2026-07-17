@@ -88,6 +88,7 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
           <label>Nome do personagem<input value={draft.name} onChange={(e) => update({ name: e.target.value })} /></label>
           <label>Nome do jogador<input value={draft.playerName} onChange={(e) => update({ playerName: e.target.value })} /></label>
           <label>Antecedente / origem<input value={draft.background || ''} onChange={(e) => update({ background: e.target.value })} /></label>
+          <label>Privacidade<select value={draft.visibility || 'public'} onChange={(e) => update({ visibility: e.target.value, isPrivate: e.target.value === 'private' })}><option value="public">Pública: outros veem nome, imagem, raça, classe e nível</option><option value="private">Privada: somente você vê</option></select></label>
         </div>}
 
         {step === 1 && <div className="imageStep">
@@ -146,7 +147,7 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
 
         {step === 10 && <div className="reviewGrid">
           <RpgImage src={draft.imageUrl} alt={draft.name} className="reviewAvatar" fallback="◇" />
-          <div><h3>{draft.name || 'Personagem sem nome'}</h3><p>{race?.name || 'Raça não selecionada'} · {characterClass?.name || 'Classe não selecionada'} · Nível {draft.level}</p><p>Vida {draft.currentHp}/{draft.maxHp} · {draft.equipment.length} equipamentos · {draft.abilities.length} habilidades</p></div>
+          <div><h3>{draft.name || 'Personagem sem nome'}</h3><p>{race?.name || 'Raça não selecionada'} · {characterClass?.name || 'Classe não selecionada'} · Nível {draft.level}</p><p>{(draft.visibility || 'public') === 'private' ? 'Ficha privada' : 'Resumo público'} · Vida {draft.currentHp}/{draft.maxHp} · {draft.equipment.length} equipamentos · {draft.abilities.length} habilidades</p></div>
           <ValidationMessages validation={validation} />
         </div>}
 

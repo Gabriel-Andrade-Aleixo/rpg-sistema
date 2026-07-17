@@ -54,6 +54,15 @@ class CharacterRepository {
     return _localCacheService.listCharacters();
   }
 
+  Future<List<Character>> listPublicCharacters() async {
+    if (!usingBackend) return const [];
+    try {
+      return _backendApiService.listPublicCharacters();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<Character?> getCharacter(String id) async {
     final pending = _pendingCharacters[id];
     if (pending != null) return pending;

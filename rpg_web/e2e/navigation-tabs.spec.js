@@ -27,13 +27,20 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
     ],
   };
 
+  await page.addInitScript((session) => {
+    window.localStorage.setItem('rpg-auth-session', JSON.stringify(session));
+  }, {
+    token: 'e2e-admin-token',
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    user: { id: 'user_e2e_admin', email: 'mestre.e2e@example.com', displayName: 'Mestre E2E', role: 'admin' },
+  });
   await page.route('http://localhost:8787/characters', async (route) => {
     if (route.request().method() === 'POST') {
       character = route.request().postDataJSON().character;
       await route.fulfill({ json: { ok: true, character } });
       return;
     }
-    await route.fulfill({ json: { ok: true, characters: [character] } });
+    await route.fulfill({ json: { ok: true, characters: [character], publicCharacters: [] } });
   });
   await page.route('http://localhost:8787/catalog*', async (route) => route.fulfill({ json: { ok: true, catalog } }));
   await page.route('http://localhost:8787/catalog/items', async (route) => {
