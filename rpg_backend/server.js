@@ -170,10 +170,12 @@ export async function requestHandler(req, res) {
 
     return sendJson(res, 404, { ok: false, error: 'Rota nao encontrada.' });
   } catch (error) {
-    return sendJson(res, error?.statusCode || 500, {
+    const statusCode = error?.statusCode || 500;
+    if (statusCode >= 500) console.error(error);
+    return sendJson(res, statusCode, {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
-      ...(error?.details ? { details: error.details } : {}),
+      error: publicErrorMessage(error, statusCode),
+      ...(statusCode < 500 && error?.details ? { details: error.details } : {}),
     });
   }
 }
@@ -212,6 +214,21 @@ function setCorsHeaders(res) {
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
+}
+
+function publicErrorMessage(error, statusCode) {
+  if (isDatabaseConnectionError(error)) {
+    return 'Banco de dados indisponível. Verifique a DATABASE_URL do backend.';
+  }
+  if (statusCode >= 500) return 'Erro interno no servidor.';
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isDatabaseConnectionError(error) {
+  const code = String(error?.code || '');
+  const message = String(error?.message || error || '');
+  return ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'ENETUNREACH'].includes(code)
+    || /getaddrinfo|supabase\.co|database|postgres/i.test(message);
 }
 
 async function readJson(req) {

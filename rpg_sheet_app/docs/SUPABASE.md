@@ -4,6 +4,23 @@ O mobile chama o backend por `BACKEND_URL`. O app nunca acessa o Postgres direta
 
 No backend, configure `DATABASE_URL` em `../rpg_backend/.env` ou nas variáveis do provedor de deploy. Esse arquivo está ignorado pelo Git.
 
+## Vercel
+
+Em deploy na Vercel, não use a URL direta do banco no formato `db.<project-ref>.supabase.co`. Essa URL direta do Supabase pode resolver apenas para IPv6, e as Functions da Vercel não conectam em hosts IPv6.
+
+Use uma destas opções:
+
+- Preferencial: no Supabase, abra **Project Settings > Database > Connection string > Connection pooling** e copie a URI do **Session pooler** ou **Transaction pooler**. Coloque essa URI em `DATABASE_URL` na Vercel e faça redeploy.
+- Alternativa paga: habilite o IPv4 add-on do Supabase e então use a URL direta.
+
+Depois de trocar a variável, teste:
+
+```bash
+curl https://SEU_BACKEND.vercel.app/catalog
+```
+
+Se retornar catálogo ou erro de autenticação esperado em outras rotas, a conexão do backend com o Postgres voltou.
+
 ## Tabelas principais
 
 - `catalog_categories`: categorias oficiais, como `Classes`, `Racas`, `Magias`, `Equipamentos` e `Sistema`.

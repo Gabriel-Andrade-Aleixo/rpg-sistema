@@ -67,10 +67,7 @@ class BackendApiService {
     required String token,
     required String password,
   }) async {
-    await _post('/auth/password/reset', {
-      'token': token,
-      'password': password,
-    });
+    await _post('/auth/password/reset', {'token': token, 'password': password});
   }
 
   Future<OfficialCatalog> loadCatalog({bool refresh = false}) async {
@@ -178,11 +175,7 @@ class BackendApiService {
     Map<String, dynamic> payload,
   ) async {
     final response = await _client
-        .post(
-          _uri(path),
-          headers: _headers(),
-          body: jsonEncode(payload),
-        )
+        .post(_uri(path), headers: _headers(), body: jsonEncode(payload))
         .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
@@ -199,11 +192,7 @@ class BackendApiService {
     Map<String, dynamic> payload,
   ) async {
     final response = await _client
-        .put(
-          _uri(path),
-          headers: _headers(),
-          body: jsonEncode(payload),
-        )
+        .put(_uri(path), headers: _headers(), body: jsonEncode(payload))
         .timeout(const Duration(seconds: 25));
     return _decode(response);
   }
@@ -230,9 +219,10 @@ class BackendApiService {
       );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-        'Backend respondeu ${response.statusCode}: ${response.body}',
-      );
+      final message = data is Map
+          ? data['error']?.toString()
+          : 'Backend respondeu ${response.statusCode}.';
+      throw StateError(message ?? 'Backend respondeu ${response.statusCode}.');
     }
     if (data is! Map) throw StateError('Resposta invalida do backend.');
     if (data['ok'] != true) {
