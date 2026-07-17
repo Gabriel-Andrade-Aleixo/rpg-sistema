@@ -112,6 +112,15 @@ export async function listAdminCharacters() {
   return data.characters || [];
 }
 
+export async function resetAdminUserPassword(userId, password) {
+  const data = await request(`/admin/users/${encodeURIComponent(userId)}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password }),
+  });
+  if (!data.user?.id) throw new Error('O backend não confirmou a redefinição de senha.');
+  return data;
+}
+
 export async function transferCharacterOwner(characterId, ownerUserId) {
   const data = await request(`/admin/characters/${encodeURIComponent(characterId)}/owner`, {
     method: 'PUT',

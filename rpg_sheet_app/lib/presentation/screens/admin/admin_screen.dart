@@ -25,6 +25,7 @@ class AdminScreen extends StatefulWidget {
     required this.onDeleteEntry,
     required this.onLoadOwnership,
     required this.onTransferOwner,
+    required this.onResetUserPassword,
     this.embedded = false,
   });
 
@@ -40,6 +41,8 @@ class AdminScreen extends StatefulWidget {
   final Future<AdminOwnershipDirectory> Function() onLoadOwnership;
   final Future<void> Function(String characterId, String ownerUserId)
   onTransferOwner;
+  final Future<void> Function(String userId, String password)
+  onResetUserPassword;
   final Future<void> Function() onRefresh;
   final bool embedded;
 
@@ -52,8 +55,16 @@ class _AdminScreenState extends State<AdminScreen> {
   var _query = '';
   Future<AdminOwnershipDirectory>? _ownershipFuture;
   final Map<String, String> _ownerSelection = {};
+  final _newPassword = TextEditingController();
+  var _passwordUserId = '';
 
   List<CatalogEntry> get _spells => widget.catalog.entriesFor('magias');
+
+  @override
+  void dispose() {
+    _newPassword.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +326,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
             ),
+            _passwordPanel(context, directory.users),
             Expanded(
               child: characters.isEmpty
                   ? Center(
@@ -338,6 +350,94 @@ class _AdminScreenState extends State<AdminScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _passwordPanel(
+    BuildContext context,
+    List<Map<String, dynamic>> users,
+  ) {
+    if (_passwordUserId.isEmpty && users.isNotEmpty) {
+      _passwordUserId = _mapText(users.first, 'id');
+    }
+    final selectedExists = users.any(
+      (user) => _mapText(user, 'id') == _passwordUserId,
+    );
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.lock_reset_outlined,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Redefinir senha',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        'As sessões antigas do usuário serão encerradas.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedExists ? _passwordUserId : null,
+              decoration: const InputDecoration(labelText: 'Usuário'),
+              items: users
+                  .map(
+                    (user) => DropdownMenuItem(
+                      value: _mapText(user, 'id'),
+                      child: Text(
+                        '${_mapText(user, 'displayName').isEmpty ? _mapText(user, 'email') : _mapText(user, 'displayName')} · ${_mapText(user, 'email')}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setState(() {
+                _passwordUserId = value ?? '';
+              }),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _newPassword,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Nova senha',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed:
+                    _passwordUserId.isEmpty || _newPassword.text.length < 8
+                    ? null
+                    : _resetUserPassword,
+                icon: const Icon(Icons.lock_reset),
+                label: const Text('Redefinir senha'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -471,6 +571,16 @@ class _AdminScreenState extends State<AdminScreen> {
       await widget.onTransferOwner(characterId, ownerUserId);
       await _reloadOwnership();
     }, 'Ficha transferida.');
+  }
+
+  Future<void> _resetUserPassword() async {
+    final userId = _passwordUserId;
+    final password = _newPassword.text;
+    await _runAction(context, () async {
+      await widget.onResetUserPassword(userId, password);
+      _newPassword.clear();
+      if (mounted) setState(() {});
+    }, 'Senha redefinida.');
   }
 
   Widget _manager(BuildContext context, String kind) {

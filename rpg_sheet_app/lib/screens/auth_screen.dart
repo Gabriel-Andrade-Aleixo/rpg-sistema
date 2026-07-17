@@ -43,13 +43,6 @@ class _AuthScreenState extends State<AuthScreen> {
           _displayName.text.trim(),
         );
         await widget.onDone();
-      } else if (_mode == 'forgot') {
-        final result = await widget.repository.requestPasswordReset(
-          _email.text.trim(),
-        );
-        setState(() {
-          _message = _passwordResetMessage(result);
-        });
       } else if (_mode == 'reset') {
         await widget.repository.resetPassword(
           _token.text.trim(),
@@ -78,18 +71,6 @@ class _AuthScreenState extends State<AuthScreen> {
       return 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
     }
     return 'Não foi possível continuar: $error';
-  }
-
-  String _passwordResetMessage(Map<String, dynamic> result) {
-    final token = result['resetToken']?.toString() ?? '';
-    if (token.isNotEmpty) return 'Token de recuperação: $token';
-    if (result['delivered'] == true) {
-      return 'Enviamos as instruções de recuperação para o email informado.';
-    }
-    if (result['emailConfigured'] == false) {
-      return 'O pedido foi registrado, mas o envio de email ainda não está configurado no backend.';
-    }
-    return 'Se o email existir, enviaremos as instruções de recuperação.';
   }
 
   @override
@@ -166,17 +147,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                     ],
-                    if (_mode != 'forgot') ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _password,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Senha',
-                          prefixIcon: Icon(Icons.lock_outline),
-                        ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _password,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Senha',
+                        prefixIcon: Icon(Icons.lock_outline),
                       ),
-                    ],
+                    ),
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: _loading ? null : _submit,
@@ -202,13 +181,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                         TextButton(
                           onPressed: () => setState(() {
-                            _mode = 'forgot';
-                            _message = '';
-                          }),
-                          child: const Text('Esqueci a senha'),
-                        ),
-                        TextButton(
-                          onPressed: () => setState(() {
                             _mode = 'reset';
                             _message = '';
                           }),
@@ -228,14 +200,12 @@ class _AuthScreenState extends State<AuthScreen> {
 
   String _title() => switch (_mode) {
     'register' => 'Criar conta',
-    'forgot' => 'Recuperar senha',
     'reset' => 'Definir nova senha',
     _ => 'Entrar',
   };
 
   String _button() => switch (_mode) {
     'register' => 'Cadastrar',
-    'forgot' => 'Solicitar recuperação',
     'reset' => 'Trocar senha',
     _ => 'Entrar',
   };

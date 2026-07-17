@@ -9,6 +9,7 @@ import {
   publicUser,
   registerUser,
   resetPassword,
+  setUserPasswordForAdmin,
   userFromBearerHeader,
 } from './lib/authStore.js';
 import {
@@ -102,6 +103,21 @@ export async function requestHandler(req, res) {
     if (req.method === 'GET' && path === '/admin/users') {
       await requireAdmin(req);
       return sendJson(res, 200, { ok: true, users: (await listUsersForAdmin()).map(publicUser) });
+    }
+
+    const adminPasswordMatch = path.match(/^\/admin\/users\/([^/]+)\/password$/);
+    if (adminPasswordMatch && req.method === 'PUT') {
+      await requireAdmin(req);
+      const body = await readJson(req);
+      const reset = await setUserPasswordForAdmin({
+        userId: decodeURIComponent(adminPasswordMatch[1]),
+        password: body.password,
+      });
+      return sendJson(res, 200, {
+        ok: true,
+        user: publicUser(reset.user),
+        sessionsRemoved: reset.sessionsRemoved,
+      });
     }
 
     if (req.method === 'GET' && path === '/admin/characters') {

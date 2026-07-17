@@ -437,6 +437,12 @@ textarea { resize: vertical; }
 .managerEntry p { margin: 0; color: var(--muted); font-size: 12px; }
 .managerEntryActions { display: flex; gap: 5px; }
 .ownershipPanel { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.adminPasswordPanel { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 300px) minmax(170px, 230px) auto; align-items: end; gap: 12px; padding: 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.adminPasswordPanel > div { display: grid; gap: 3px; min-width: 0; }
+.adminPasswordPanel strong { color: var(--ink); }
+.adminPasswordPanel div span, .adminPasswordPanel label span { color: var(--muted); font-size: 12px; }
+.adminPasswordPanel label { display: grid; gap: 5px; margin: 0; min-width: 0; }
+.adminPasswordPanel .primaryButton { width: auto; }
 .ownershipRows { display: grid; }
 .ownershipRow { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(240px, 330px) auto; align-items: center; gap: 12px; min-height: 92px; padding: 12px; border-top: 1px solid var(--line); background: var(--surface); }
 .ownershipRow:first-child { border-top: 0; }
@@ -587,6 +593,8 @@ textarea { resize: vertical; }
   .managerEntryActions { grid-column: 2; }
   .ownershipRow { grid-template-columns: 54px minmax(0, 1fr); align-items: start; }
   .ownershipSelect, .ownershipRow > .primaryButton { grid-column: 1 / -1; width: 100%; }
+  .adminPasswordPanel { grid-template-columns: 1fr; align-items: stretch; }
+  .adminPasswordPanel .primaryButton { width: 100%; }
   .formPair, .formTriple { grid-template-columns: 1fr; }
 }
 

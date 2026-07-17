@@ -49,6 +49,10 @@ class AuthRepository {
   Future<void> resetPassword(String token, String password) =>
       _backend.resetPassword(token: token, password: password);
 
+  Future<void> resetAdminUserPassword(String userId, String password) async {
+    await _backend.resetAdminUserPassword(userId: userId, password: password);
+  }
+
   Future<void> logout() async {
     await _backend.logout();
     final preferences = await SharedPreferences.getInstance();

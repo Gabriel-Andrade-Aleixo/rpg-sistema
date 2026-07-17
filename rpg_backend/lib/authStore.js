@@ -119,6 +119,32 @@ export async function listUsersForAdmin() {
   return result.rows.map(userFromRow);
 }
 
+export async function setUserPasswordForAdmin({ userId, password }) {
+  assertUserId(userId);
+  assertPassword(password);
+  return transaction(async (client) => {
+    const updated = await client.query(
+      `UPDATE rpg_users
+       SET password_hash = $1, updated_at = now()
+       WHERE id = $2 AND deleted_at IS NULL
+       RETURNING id, email, display_name, role, created_at`,
+      [await hashPassword(password), userId],
+    );
+    const row = updated.rows[0];
+    if (!row) {
+      const error = new Error('Usuário não encontrado.');
+      error.statusCode = 404;
+      throw error;
+    }
+    const sessions = await client.query('DELETE FROM auth_sessions WHERE user_id = $1', [row.id]);
+    await client.query(
+      'UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL',
+      [row.id],
+    );
+    return { user: userFromRow(row), sessionsRemoved: sessions.rowCount };
+  });
+}
+
 export async function resetPassword({ token, password }) {
   assertPassword(password);
   const tokenHash = hashToken(token || '');
@@ -194,6 +220,15 @@ function assertPassword(password) {
   const value = String(password || '');
   if (value.length < 8 || value.length > 200) {
     const error = new Error('A senha precisa ter entre 8 e 200 caracteres.');
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+function assertUserId(userId) {
+  const value = String(userId || '').trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    const error = new Error('Usuário inválido.');
     error.statusCode = 400;
     throw error;
   }

@@ -70,6 +70,21 @@ class BackendApiService {
     await _post('/auth/password/reset', {'token': token, 'password': password});
   }
 
+  Future<Map<String, dynamic>> resetAdminUserPassword({
+    required String userId,
+    required String password,
+  }) async {
+    final data = await _put(
+      '/admin/users/${Uri.encodeComponent(userId)}/password',
+      {'password': password},
+    );
+    final user = data['user'];
+    if (user is! Map) {
+      throw StateError('O backend não confirmou a redefinição de senha.');
+    }
+    return Map<String, dynamic>.from(user);
+  }
+
   Future<OfficialCatalog> loadCatalog({bool refresh = false}) async {
     final data = await _get('/catalog${refresh ? '?refresh=true' : ''}');
     final catalog = data['catalog'];

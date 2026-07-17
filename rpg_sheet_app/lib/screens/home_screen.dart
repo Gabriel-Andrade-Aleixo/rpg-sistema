@@ -326,6 +326,9 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(_reload);
           await _future;
         },
+        onResetUserPassword: (userId, password) async {
+          await widget.authRepository.resetAdminUserPassword(userId, password);
+        },
         onRefresh: () async {
           setState(() => _reload(refreshCatalog: true));
           await _future;

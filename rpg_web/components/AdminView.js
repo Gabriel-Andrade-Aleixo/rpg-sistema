@@ -6,7 +6,7 @@ import RpgImage from './RpgImage';
 const emptyItem = { name: '', type: 'Armadura', armorCategory: 'Leve', description: '', bonusTarget: 'defense', bonusValue: 1, weight: 0, imageUrl: '' };
 const emptySpell = { name: '', school: 'Arcana', topic: 'Sem tópico', className: '', actionType: '', actionId: '', level: 0, description: '', manaCost: 0, focusCost: 0, humanityCost: 0, range: '', damage: '', imageUrl: '' };
 
-export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem, onLoadAdminDirectory, onTransferCharacterOwner }) {
+export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem, onLoadAdminDirectory, onTransferCharacterOwner, onResetUserPassword }) {
   const [tab, setTab] = useState('overview');
   const [editor, setEditor] = useState(null);
   const [search, setSearch] = useState('');
@@ -113,6 +113,19 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     }
   }
 
+  async function resetUserPassword(userId, password) {
+    setSubmitting(true);
+    setMessage('');
+    try {
+      await onResetUserPassword(userId, password);
+      setMessage('Senha redefinida. As sessões antigas do usuário foram encerradas.');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function refresh() {
     await onRefresh?.();
     if (tab === 'ownership') await loadDirectory();
@@ -126,11 +139,11 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
       <button className={tab === 'spells' ? 'active' : ''} onClick={() => { setTab('spells'); setEditor(null); }}><Sparkles aria-hidden="true" />Magias <span>{groups.spells.length}</span></button>
       <button className={tab === 'ownership' ? 'active' : ''} onClick={() => { setTab('ownership'); setEditor(null); }}><UserRoundCog aria-hidden="true" />Fichas <span>{adminCharacters.length || characters.length}</span></button>
     </nav>
-    {message && <p className={/criado|atualizado|removido|transferida/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
+    {message && <p className={/criado|atualizado|removido|transferida|redefinida/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
     {tab === 'overview' ? <>
       <div className="adminGrid">{metrics.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}</div>
       <section className="adminDiagnostic"><div><h3>Qualidade do catálogo</h3><p>{invalid ? `${invalid} ficha(s) precisam de revisão de raça ou classe.` : 'As fichas estão consistentes com o catálogo atual.'}</p></div><div><strong>{catalog.board?.name || 'RPG Supabase'}</strong><span>Fonte oficial no Supabase</span></div></section>
-    </> : tab === 'ownership' ? <OwnershipManager catalog={catalog} users={adminUsers} characters={adminCharacters} ownerSelection={ownerSelection} setOwnerSelection={setOwnerSelection} loading={directoryLoading} submitting={submitting} onRefresh={loadDirectory} onTransfer={transfer} /> : <div className={`catalogManager ${editor ? 'editing' : ''}`}>
+    </> : tab === 'ownership' ? <OwnershipManager catalog={catalog} users={adminUsers} characters={adminCharacters} ownerSelection={ownerSelection} setOwnerSelection={setOwnerSelection} loading={directoryLoading} submitting={submitting} onRefresh={loadDirectory} onTransfer={transfer} onResetPassword={resetUserPassword} /> : <div className={`catalogManager ${editor ? 'editing' : ''}`}>
       <section className="catalogManagerList">
         <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}`} placeholder={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}...`} value={search} onChange={(event) => setSearch(event.target.value)} /></label><button className="primaryButton" onClick={() => beginCreate(tab === 'spells' ? 'spell' : 'item')}><Plus aria-hidden="true" />Novo</button></div>
         <div className="managerEntries">{filtered.map((entry) => <article className="managerEntry" key={entry.id}><RpgImage src={entry.imageUrl} alt="" className="managerThumb" fallback={<ImageIcon aria-hidden="true" />} /><div><strong>{entry.name}</strong><span>{entry.labels?.map((label) => label.name).filter(Boolean).slice(0, 2).join(' · ') || entry.category}</span><p>{summaryFromEntry(entry)}</p></div><div className="managerEntryActions"><button className="iconButton" title="Editar" aria-label={`Editar ${entry.name}`} onClick={() => beginEdit(tab === 'spells' ? 'spell' : 'item', entry)}><Pencil aria-hidden="true" /></button><button className="iconButton dangerButton" title="Excluir" aria-label={`Excluir ${entry.name}`} onClick={() => remove(tab === 'spells' ? 'spell' : 'item', entry)}><Trash2 aria-hidden="true" /></button></div></article>)}</div>
@@ -141,13 +154,30 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   </section>;
 }
 
-function OwnershipManager({ catalog, users, characters, ownerSelection, setOwnerSelection, loading, submitting, onRefresh, onTransfer }) {
+function OwnershipManager({ catalog, users, characters, ownerSelection, setOwnerSelection, loading, submitting, onRefresh, onTransfer, onResetPassword }) {
   const [query, setQuery] = useState('');
+  const [passwordUserId, setPasswordUserId] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const filtered = useMemo(() => characters.filter((character) => {
     const haystack = [character.name, character.playerName, character.ownerName, character.ownerEmail].join(' ');
     return haystack.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'));
   }), [characters, query]);
+  useEffect(() => {
+    if (!passwordUserId && users[0]?.id) setPasswordUserId(users[0].id);
+  }, [users, passwordUserId]);
+  async function submitPassword(event) {
+    event.preventDefault();
+    if (!passwordUserId || newPassword.length < 8) return;
+    await onResetPassword(passwordUserId, newPassword);
+    setNewPassword('');
+  }
   return <section className="ownershipPanel">
+    <form className="adminPasswordPanel" onSubmit={submitPassword}>
+      <div><strong>Redefinir senha de usuário</strong><span>O usuário será desconectado das sessões antigas.</span></div>
+      <label><span>Usuário</span><select value={passwordUserId} onChange={(event) => setPasswordUserId(event.target.value)}><option value="">Selecionar usuário</option>{users.map((user) => <option key={user.id} value={user.id}>{user.displayName || user.email} · {user.email}</option>)}</select></label>
+      <label><span>Nova senha</span><input type="password" minLength="8" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Mínimo 8 caracteres" /></label>
+      <button className="primaryButton" type="submit" disabled={submitting || !passwordUserId || newPassword.length < 8}>Redefinir</button>
+    </form>
     <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label="Buscar fichas" placeholder="Buscar fichas por nome, jogador ou dono..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="ghostButton" type="button" onClick={onRefresh} disabled={loading}><RefreshCw aria-hidden="true" />Atualizar</button></div>
     {loading ? <div className="managerEmpty"><span>Carregando usuários e fichas...</span></div> : <div className="ownershipRows">
       {filtered.map((character) => {
