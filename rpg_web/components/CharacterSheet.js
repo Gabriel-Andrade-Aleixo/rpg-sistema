@@ -5,6 +5,7 @@ import StatBreakdown from './StatBreakdown';
 import { attributes, currencyLabel, unique } from '../lib/rpgData';
 import {
   attributeBreakdown,
+  activeDefenseFormula,
   allowedCombatXpTargets,
   armorClassValue,
   catalogGroups,
@@ -17,6 +18,7 @@ import {
   formulaRollModifiers,
   normalize,
   parseClass,
+  parseRace,
   parseCatalogSpell,
   parseSkill,
   recalculateCharacter,
@@ -27,6 +29,7 @@ import {
   changeHumanity,
   divineAccuracyBonus,
   divinityValue,
+  faithDamageBonus,
   hasFaithDamageBonus,
   humanityResistanceBonus,
   humanityStatus,
@@ -99,7 +102,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       const sources = (character.proficiencies || []).filter((value) => normalize(value).includes(target));
       return { id: entry.id, name: entry.name, value: skillValue(character, parseSkill(entry)), proficient: sources.length > 0 || Number(character.skillBonuses?.[entry.id] || 0) > 0, source: sources.join(' · ') || (character.skillBonuses?.[entry.id] ? `Progressão permanente +${character.skillBonuses[entry.id]}` : 'Sem bônus permanente'), category: inferProficiencyCategory(`${entry.name} ${entry.description} ${(entry.labels || []).map((item) => item.name).join(' ')}`) };
     });
-  }, [catalog, character.proficiencies]);
+  }, [catalog, character.attributes, character.modifiers, character.proficiencies, character.skillBonuses]);
   const filteredProficiencies = useMemo(() => proficiencyRows.filter((item) => {
     if (proficiencyFilter === 'with') return item.proficient;
     if (proficiencyFilter === 'without') return !item.proficient;
@@ -117,7 +120,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
 
       {activeTab === 'summary' && <>
       <Panel title="Vida e recursos" subtitle="Controles da sessão">
-        <ResourceControl label="Vida" current={character.currentHp} max={character.maxHp} onChange={(currentHp) => persistCharacter(changeHitPoints(character, currentHp))} />
+        <HitPointControl character={character} raceEntry={race} onChange={persistCharacter} />
         <ResourceControl label="Mana" current={character.currentMana} max={character.maxMana} onChange={(currentMana) => persist({ currentMana })} />
         {character.currentHp === 0 && <DeathSaves character={character} onChange={persistCharacter} />}
       </Panel>
@@ -140,6 +143,8 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       </Panel>}
 
       {normalize(classEntry?.name || '') === 'arqueiro espectral' && <ClassActionsPanel character={character} classEntry={classEntry} onChange={persistCharacter} />}
+
+      <RuleContextPanel character={character} raceEntry={race} classEntry={classEntry} onChange={persistCharacter} />
 
       <Panel title="Atributos" subtitle="Clique no dado para testar" wide>
         <div className="breakdownGrid">{attributes.map(([id, label]) => <StatBreakdown key={id} label={label} breakdown={attributeBreakdown(character, id)} onRoll={() => rollAttribute(id, label)} />)}</div>
@@ -218,12 +223,70 @@ function Panel({ title, subtitle, wide = false, children }) {
 function Metric({ label, value }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
 
 function DefensePanel({ character, classEntry, parsedClass }) {
-  const terms = parsedClass?.defenseFormula?.terms || [];
+  const activeFormula = activeDefenseFormula(character, classEntry);
+  const terms = activeFormula?.terms || [];
   const formula = terms.length
     ? `Defesa = floor(${terms.map((term) => `${attributeLabel(term.attribute)} × ${Math.round(Number(term.weight) * 100)}%`).join(' + ')})`
     : 'Defesa = floor(Destreza × 70% + Constituição × 30%)';
   const equipment = (character.modifiers || []).filter((item) => item.sourceType === 'equipment' && item.targetType === 'stat' && ['defense', 'armorClass'].includes(item.targetId));
-  return <Panel title="Defesa e Classe de Armadura" subtitle="Valores atuais"><div className="metricGrid"><Metric label="Defesa" value={defenseValue(character, classEntry)} /><Metric label="CA" value={armorClassValue(character, classEntry)} /></div><p className="formulaText">{formula}<br />CA = 10 + Defesa + bônus direto de CA</p>{equipment.length > 0 && <div className="modifierSummary">{equipment.map((item) => <span key={item.id}>{item.sourceName}: +{item.value} {item.targetId === 'defense' ? 'Defesa' : 'CA'}</span>)}</div>}</Panel>;
+  const adaptive = Boolean(character.combatContext?.enemyWithinTwoMeters && parsedClass?.metadata?.conditionalDefense?.enemyWithinTwoMeters);
+  return <Panel title="Defesa e Classe de Armadura" subtitle={adaptive ? 'Defesa adaptativa ativa' : 'Valores atuais'}><div className="metricGrid"><Metric label="Defesa" value={defenseValue(character, classEntry)} /><Metric label="CA" value={armorClassValue(character, classEntry)} /></div><p className="formulaText">{formula}<br />CA = 10 + Defesa + bônus direto de CA</p>{equipment.length > 0 && <div className="modifierSummary">{equipment.map((item) => <span key={item.id}>{item.sourceName}: +{item.value} {item.targetId === 'defense' ? 'Defesa' : 'CA'}</span>)}</div>}</Panel>;
+}
+
+function HitPointControl({ character, raceEntry, onChange }) {
+  const [amount, setAmount] = useState(1);
+  const [damageType, setDamageType] = useState('physical');
+  const race = raceEntry ? parseRace(raceEntry, character.raceVariant) : null;
+  const mechanics = race?.metadata || {};
+  const physicalReduction = (mechanics.damageReduction || [])
+    .filter((rule) => rule.type === 'physical')
+    .reduce((total, rule) => total + Number(rule.value || 0), 0);
+  const healingCap = Number(mechanics.healingCapPercent || 100);
+  const delta = Math.max(1, Number(amount) || 1);
+  const maximum = Math.max(0, Number(character.maxHp) || 0);
+  const current = Math.min(maximum, Math.max(0, Number(character.currentHp) || 0));
+  const cap = Math.floor(maximum * healingCap / 100);
+
+  function takeDamage() {
+    const reduction = damageType === 'physical' ? physicalReduction : 0;
+    const applied = Math.max(0, delta - reduction);
+    onChange(changeHitPoints(character, current - applied));
+  }
+
+  function heal(longRest = false) {
+    const targetMaximum = longRest ? maximum : Math.min(maximum, cap);
+    onChange(changeHitPoints(character, Math.min(targetMaximum, current + delta)));
+  }
+
+  const percent = maximum ? current / maximum * 100 : 0;
+  return <div className="resourceControl"><div className="resourceHeader"><strong>Vida</strong><span>{current}/{maximum}</span></div><div className="resourceBar"><span style={{ width: `${percent}%` }} /></div><div className="hpAdjust"><input aria-label="Quantidade de vida" type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /><select aria-label="Tipo de dano" value={damageType} onChange={(event) => setDamageType(event.target.value)}><option value="physical">Físico</option><option value="magical">Mágico</option><option value="divine">Divino</option><option value="other">Outro</option></select><button className="removeButton" disabled={!current} onClick={takeDamage}>Aplicar dano</button><button disabled={current >= cap} onClick={() => heal(false)}>Curar</button><button disabled={current >= maximum} onClick={() => heal(true)}>Descanso longo</button></div>{physicalReduction > 0 && <p className="muted">Dano físico recebido é reduzido em {physicalReduction}.</p>}{healingCap < 100 && <p className="muted">Curas comuns alcançam no máximo {healingCap}% da vida. Descanso longo ignora esse limite.</p>}</div>;
+}
+
+function RuleContextPanel({ character, raceEntry, classEntry, onChange }) {
+  const race = raceEntry ? parseRace(raceEntry, character.raceVariant) : null;
+  const parsedClass = classEntry ? parseClass(classEntry) : null;
+  const mechanics = race?.metadata || {};
+  const options = [
+    parsedClass?.metadata?.conditionalDefense?.enemyWithinTwoMeters && ['enemyWithinTwoMeters', 'Inimigo a menos de 2 m', 'Ativa a Defesa Adaptativa da classe.'],
+    mechanics.conditionalRollBonuses?.some((rule) => rule.condition === 'dark_or_night') && ['darkOrNight', 'Escuro ou noite', 'Ativa bônus raciais condicionais de rolagem.'],
+    mechanics.environmentEffects?.some((rule) => rule.environment === 'quente') && ['hotEnvironment', 'Ambiente quente', 'Aplica efeitos raciais de região quente.'],
+    mechanics.environmentEffects?.some((rule) => rule.environment === 'gelo') && ['coldEnvironment', 'Ambiente gelado', 'Aplica efeitos raciais de região gelada.'],
+    mechanics.conditionalCosts?.some((rule) => rule.condition === 'without_sunlight') && ['withoutSunlight', 'Sem luz solar', 'O Mestre define o custo adicional de Humanidade.'],
+    mechanics.statusEffects?.some((rule) => rule.status === 'blinded') && ['blinded', 'Cegueira', 'Lembrete: sofre o dano por turno descrito na raça.'],
+  ].filter(Boolean);
+  if (!options.length) return null;
+  const activeEffects = [
+    character.combatContext?.hotEnvironment && mechanics.environmentEffects?.some((rule) => rule.environment === 'quente') && 'Deslocamento: -2 m em ambiente quente.',
+    character.combatContext?.coldEnvironment && mechanics.environmentEffects?.some((rule) => rule.environment === 'gelo') && 'Deslocamento: -2 m em ambiente gelado.',
+    character.combatContext?.withoutSunlight && mechanics.conditionalCosts?.length && 'Humanidade: custo adicional definido pelo Mestre enquanto estiver sem luz solar.',
+    character.combatContext?.blinded && mechanics.statusEffects?.find((rule) => rule.status === 'blinded')?.damagePerTurn && `Cegueira: ${mechanics.statusEffects.find((rule) => rule.status === 'blinded').damagePerTurn} de dano físico por turno.`,
+  ].filter(Boolean);
+
+  function toggle(id) {
+    onChange({ ...character, combatContext: { ...(character.combatContext || {}), [id]: !character.combatContext?.[id] } });
+  }
+
+  return <Panel title="Contexto de regras" subtitle="Condições que alteram a ficha" wide><div className="ruleContextGrid">{options.map(([id, label, description]) => <label key={id} className={character.combatContext?.[id] ? 'active' : ''}><input type="checkbox" checked={Boolean(character.combatContext?.[id])} onChange={() => toggle(id)} /><span><strong>{label}</strong><small>{description}</small></span></label>)}</div>{activeEffects.length > 0 && <div className="modifierSummary">{activeEffects.map((effect) => <span key={effect}>{effect}</span>)}</div>}</Panel>;
 }
 
 function ResourceControl({ label, current, max, onChange, readOnly = false }) {
@@ -375,7 +438,7 @@ function HumanityPanel({ character, classEntry, onChange, requestRoll, recordRol
     <ResourceControl label="Divindade" current={divinity} max={100} readOnly />
     <div className="humanityStatus"><strong>{status.name}</strong><p>{status.description}</p></div>
     <div className="metricGrid"><Metric label="CD Divina" value={status.difficulty ?? (humanity === 1 ? 'Especial' : '—')} /><Metric label="Resistência" value={`+${resistance}`} /><Metric label="Acerto divino" value={`+${divineAccuracyBonus(character)}`} /></div>
-    {hasFaithDamageBonus(character) && <p className="noticeText">Magias Divinas recebem dano base + Fé.</p>}
+    {hasFaithDamageBonus(character) && <p className="noticeText">Magias Divinas recebem dano base +{faithDamageBonus(character)} (Fé / 2).</p>}
     {!status.playable && <p className="validationError">O personagem está injogável enquanto permanecer com Humanidade 0.</p>}
     <div className="humanityControls"><label>Quantidade<input type="number" min="1" max="100" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><label>Motivo<input value={reason} onChange={(event) => setReason(event.target.value)} /></label></div>
     <div className="quickActions"><button className="primaryButton" disabled={humanity <= 0} onClick={() => apply(-1)}>Gastar Humanidade</button><button disabled={humanity >= 100} onClick={() => apply(1)}>Restaurar</button><button disabled={status.difficulty === null} onClick={rollResistance}>Resistência Divina</button></div>

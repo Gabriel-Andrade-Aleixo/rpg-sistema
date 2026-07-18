@@ -36,8 +36,20 @@ class SkillCalculator {
               item.targetId == skill.entry.normalizedName,
         )
         .fold<int>(0, (sum, item) => sum + item.value.round());
-    return weighted.floor() +
+    final calculated =
+        weighted.floor() +
         catalogBonus +
         (character.skillBonuses[skill.entry.id] ?? 0);
+    final minimum = character.modifiers
+        .where(
+          (item) =>
+              item.targetType == 'skillMinimum' &&
+              item.targetId == skill.entry.normalizedName,
+        )
+        .fold<int>(
+          0,
+          (value, item) => value > item.value ? value : item.value.toInt(),
+        );
+    return calculated > minimum ? calculated : minimum;
   }
 }

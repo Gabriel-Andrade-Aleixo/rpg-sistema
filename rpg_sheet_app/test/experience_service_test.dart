@@ -106,6 +106,10 @@ void main() {
     expect(humanity.resistanceBonus(updated), 4);
     expect(humanity.divineAccuracyBonus(updated), 3);
     expect(humanity.getFaithDamageBonus(updated), isTrue);
+    final faithful = updated.copyWith(
+      attributes: {...updated.attributes, AttributeId.faith: 7},
+    );
+    expect(humanity.faithDamageBonus(faithful), 3);
 
     updated = humanity.restore(updated, 10, 'Intervenção do mestre');
     expect(humanity.humanity(updated), 55);

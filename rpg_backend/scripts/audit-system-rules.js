@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import AdmZip from 'adm-zip';
 
 import { closePool } from '../lib/postgres.js';
 import { loadCatalogFromDatabase } from '../lib/catalogStore.js';
 
 loadDotEnv();
+const documentText = loadSystemDocument();
 
 const f = (base, terms = {}) => ({ base, terms });
 const hp = (initial, fixed, roll, hybrid) => ({
@@ -79,6 +83,7 @@ const expectedClasses = {
   Ranger: {
     id: 'ranger',
     defense: f(0, { constitution: .6, dexterity: .3, intelligence: .1 }),
+    conditionalDefense: { enemyWithinTwoMeters: f(0, { dexterity: .6, constitution: .3, intelligence: .1 }) },
     hp: hp(f(14, { constitution: 3 }), f(6, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 4, ...f(5, { constitution: 1 }) }),
     attributeProgression: [p(1, 3, { dexterity: 1 }), p(4, 10, { dexterity: 1, intelligence: 1 })],
     allowedCombatXpAttributes: ['dexterity', 'intelligence'],
@@ -106,8 +111,9 @@ const expectedClasses = {
 const expectedRaces = {
   'Thri-kreen': { attributeBonuses: { dexterity: 1 }, variants: ['four_arms', 'wings'] },
   Vedalken: { variants: ['common', 'spiritual'] },
-  Lizardfolk: { attributeBonuses: { strength: 1 }, statBonuses: { armorClass: 2 } },
-  Genasi: { skillBonuses: { religiao: 2 } },
+  Lizardfolk: { attributeBonuses: { strength: 1 }, statBonuses: { armorClass: 2 }, healingCapPercent: 75 },
+  Genasi: { skillMinimums: { religiao: 6 }, immunities: ['fire'] },
+  Bugbear: { attributeBonuses: { strength: 1, dexterity: 1 }, immunities: ['cold'] },
 };
 
 const expectedSkills = {
@@ -120,6 +126,7 @@ const expectedSkills = {
 };
 
 try {
+  assertDocumentRules(documentText);
   const catalog = await loadCatalogFromDatabase();
   const classEntries = entriesFor(catalog, 'Classes');
   const raceEntries = entriesFor(catalog, 'Racas');
@@ -147,6 +154,9 @@ try {
     if (expected.attributeBonuses) assert.deepEqual(metadata.attributeBonuses, expected.attributeBonuses, `${name}: atributos`);
     if (expected.statBonuses) assert.deepEqual(metadata.statBonuses, expected.statBonuses, `${name}: estatísticas`);
     if (expected.skillBonuses) assert.deepEqual(metadata.skillBonuses, expected.skillBonuses, `${name}: perícias`);
+    if (expected.skillMinimums) assert.deepEqual(metadata.skillMinimums, expected.skillMinimums, `${name}: patamar de perícia`);
+    if (expected.healingCapPercent) assert.equal(metadata.healingCapPercent, expected.healingCapPercent, `${name}: limite de cura`);
+    if (expected.immunities) assert.deepEqual(metadata.immunities, expected.immunities, `${name}: imunidades`);
   }
 
   const attributeNames = {
@@ -182,11 +192,48 @@ try {
     .map((entry) => entry.name)
     .sort();
 
-  console.log(`Auditoria concluída: ${Object.keys(expectedClasses).length} classes, ${Object.keys(expectedRaces).length} raças, ${Object.keys(expectedSkills).length} perícias, Humanidade, Corrupção e XP corretos.`);
+  console.log(`Auditoria do DOCX concluída: ${Object.keys(expectedClasses).length} classes, ${Object.keys(expectedRaces).length} raças, ${Object.keys(expectedSkills).length} perícias, Humanidade, Corrupção e XP corretos.`);
   console.log(`Classes de catálogo sem regras jogáveis: ${unsupported.join(', ') || 'nenhuma'}.`);
   console.log(`Raças de catálogo sem regras jogáveis: ${unsupportedRaces.join(', ') || 'nenhuma'}.`);
 } finally {
   await closePool();
+}
+
+function loadSystemDocument() {
+  const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const documentPath = process.env.RPG_SYSTEM_DOCUMENT
+    || path.resolve(scriptDirectory, '../../RPG SISTEMA.docx');
+  if (!fs.existsSync(documentPath)) {
+    throw new Error(`Documento oficial não encontrado: ${documentPath}`);
+  }
+  const xml = new AdmZip(documentPath).readAsText('word/document.xml');
+  return xml
+    .replace(/<w:tab\/?\s*>/g, ' ')
+    .replace(/<w:br\/?\s*>/g, '\n')
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function assertDocumentRules(text) {
+  const normalized = normalize(text);
+  const required = [
+    'barbaro', 'mago', 'arqueiro espectral', 'maestro tatico', 'clerigo',
+    'paladino', 'ladino', 'ranger', 'bardo', 'lutador', 'thri-kreen',
+    'vedalken', 'lizardfolk', 'genasi', 'bugbear',
+    'dano base fe 2',
+    'defesa destreza 60 constituicao 30 inteligencia 10',
+    'comecam o game com 1 em forca 1 em destreza e 1 em furtividade',
+    'comecam o game com religiao 2',
+  ];
+  const missing = required.filter((value) => !normalized.includes(normalize(value)));
+  assert.deepEqual(missing, [], `O documento oficial mudou ou está incompleto: ${missing.join(', ')}`);
 }
 
 function entriesFor(catalog, category) {

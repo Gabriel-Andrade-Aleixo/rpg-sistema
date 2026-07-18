@@ -1,5 +1,6 @@
 import '../../models/character.dart';
 import '../../models/character_records.dart';
+import '../../models/rpg_rule_models.dart';
 import '../../utils/id_generator.dart';
 
 class HumanityStatus {
@@ -35,6 +36,19 @@ class HumanityService {
   bool getFaithDamageBonus(Character character) {
     final value = humanity(character);
     return value >= 26 && value <= 50;
+  }
+
+  int faithDamageBonus(Character character) {
+    if (!getFaithDamageBonus(character)) return 0;
+    final base = character.attributes[AttributeId.faith] ?? 0;
+    final modifiers = character.modifiers
+        .where(
+          (modifier) =>
+              modifier.targetType == 'attribute' &&
+              modifier.targetId == AttributeId.faith.name,
+        )
+        .fold<int>(0, (total, modifier) => total + modifier.value.round());
+    return ((base + modifiers).clamp(0, 20) / 2).floor();
   }
 
   HumanityStatus status(Character character, {String className = ''}) =>
@@ -77,7 +91,7 @@ class HumanityService {
       return const HumanityStatus(
         name: 'Influência divina',
         description:
-            'Magias Divinas recebem dano base + Fé e bônus de acerto pela Divindade.',
+            'Magias Divinas recebem dano base + Fé / 2 e bônus de acerto pela Divindade.',
         resistanceDifficulty: 18,
       );
     }

@@ -12,7 +12,7 @@ export function humanityStatus(character, classEntry = null) {
   if (humanity === 1) return { name: 'Estado de Avatar', description: 'Teste de controle a cada turno. Falha reduz a Humanidade para 0.', difficulty: null, playable: true };
   if (humanity <= 10) return { name: 'Humanidade crítica', description: 'Apenas Milagres reduzem Humanidade. Os bônus divinos continuam escalando.', difficulty: 19, playable: true };
   if (humanity <= 25) return { name: 'Domínio divino severo', description: 'Falha pode causar perda da ação, controle temporário e 1d20 de dano.', difficulty: 18, playable: true };
-  if (humanity <= 50) return { name: 'Influência divina', description: 'Magias Divinas recebem dano base + Fé e bônus de acerto pela Divindade.', difficulty: 18, playable: true };
+  if (humanity <= 50) return { name: 'Influência divina', description: 'Magias Divinas recebem dano base + Fé / 2 e bônus de acerto pela Divindade.', difficulty: 18, playable: true };
   if (humanity > 80) return { name: 'Humanidade plena', description: 'Sem influência divina suficiente para exigir teste de resistência.', difficulty: null, playable: true };
   const className = normalize(classEntry?.name || '');
   const divineClass = className === 'clerigo' || className === 'paladino';
@@ -31,6 +31,15 @@ export function divineAccuracyBonus(character) {
 export function hasFaithDamageBonus(character) {
   const humanity = humanityValue(character);
   return humanity >= 26 && humanity <= 50;
+}
+
+export function faithDamageBonus(character) {
+  if (!hasFaithDamageBonus(character)) return 0;
+  const baseFaith = Number(character?.attributes?.faith || 0);
+  const modifierFaith = (character?.modifiers || [])
+    .filter((modifier) => modifier.targetType === 'attribute' && modifier.targetId === 'faith')
+    .reduce((total, modifier) => total + Number(modifier.value || 0), 0);
+  return Math.floor(Math.max(0, baseFaith + modifierFaith) / 2);
 }
 
 export function changeHumanity(character, delta, reason = '') {

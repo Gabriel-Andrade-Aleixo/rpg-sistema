@@ -73,6 +73,7 @@ const classes = {
   },
   Ranger: {
     id: 'ranger', defense: f(0, { constitution: .6, dexterity: .3, intelligence: .1 }),
+    conditionalDefense: { enemyWithinTwoMeters: f(0, { dexterity: .6, constitution: .3, intelligence: .1 }) },
     hp: hp(f(14, { constitution: 3 }), f(6, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 4, ...f(5, { constitution: 1 }) }),
     attributeProgression: [progression(1, 3, { dexterity: 1 }), progression(4, 10, { dexterity: 1, intelligence: 1 })],
     allowedCombatXpAttributes: ['dexterity', 'intelligence'],
@@ -108,10 +109,22 @@ const races = {
   },
   Lizardfolk: {
     id: 'lizardfolk', attributeBonuses: { strength: 1 }, statBonuses: { armorClass: 2 },
+    healingCapPercent: 75,
+    environmentEffects: [{ environment: 'gelo', movementModifier: -2 }],
     traits: ['Levanta mais peso que o normal', 'Em regiões geladas perde 2m de deslocamento', 'Curas leves e médias recuperam no máximo 75% da vida; descanso longo cura tudo'],
   },
   Genasi: {
-    id: 'genasi', skillBonuses: { religiao: 2 }, traits: ['Imunidade a fogo', 'Maior custo de humanidade sem luz solar', 'Família rica pode começar com artefato religioso de nível 2'],
+    id: 'genasi', skillMinimums: { religiao: 6 }, immunities: ['fire'],
+    conditionalCosts: [{ resource: 'humanity', condition: 'without_sunlight', masterDefined: true }],
+    traits: ['Começa no grau Religião 2 (valor mínimo 6)', 'Imunidade a fogo', 'Maior custo de humanidade sem luz solar; valor definido pelo Mestre', 'Família rica pode começar com artefato religioso de nível 2'],
+  },
+  Bugbear: {
+    id: 'bugbear', attributeBonuses: { strength: 1, dexterity: 1 },
+    immunities: ['cold'], damageReduction: [{ type: 'physical', value: 1 }],
+    conditionalRollBonuses: [{ targetType: 'skillRoll', targetId: 'furtividade', value: 1, condition: 'dark_or_night' }],
+    environmentEffects: [{ environment: 'quente', movementModifier: -2 }],
+    statusEffects: [{ status: 'blinded', damagePerTurn: '1d4', damageType: 'physical' }],
+    traits: ['Visão no escuro', '+1 Furtividade somente à noite ou em local escuro', '-1 dano físico recebido', 'Imunidade ao frio', 'Em local quente perde 2m de deslocamento', 'Cegueira causa 1d4 de dano físico por turno'],
   },
 };
 

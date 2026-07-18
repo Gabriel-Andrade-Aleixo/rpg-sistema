@@ -16,6 +16,9 @@ class CharacterRepository {
   final Map<String, Character> _pendingCharacters = {};
   final Map<String, Timer> _saveTimers = {};
   final Map<String, Future<void>> _writeChains = {};
+  final Map<String, String> _syncErrors = {};
+
+  String syncError(String characterId) => _syncErrors[characterId] ?? '';
 
   bool get usingBackend => _backendApiService.isConfigured;
   bool get usingRemote => usingBackend;
@@ -157,6 +160,7 @@ class CharacterRepository {
           changedFields: changedFields,
         );
         _savedCharacters[id] = persisted;
+        _syncErrors.remove(id);
         final newer = _pendingCharacters[id];
         if (newer == null) {
           await _localCacheService.saveCharacter(persisted);
@@ -165,10 +169,22 @@ class CharacterRepository {
           _pendingCharacters[id] = revised;
           await _localCacheService.saveCharacter(revised);
         }
-      } catch (_) {
+      } on BackendApiException catch (error) {
         _pendingCharacters.putIfAbsent(id, () => pending);
+        _syncErrors[id] = error.statusCode == 409
+            ? 'A ficha foi alterada em outro dispositivo. Reabra-a para conciliar as mudanças.'
+            : error.message;
+        if (error.statusCode >= 500 || error.statusCode == 429) {
+          _saveTimers[id] = Timer(
+            const Duration(seconds: 8),
+            () => _flushCharacter(id),
+          );
+        }
+      } catch (error) {
+        _pendingCharacters.putIfAbsent(id, () => pending);
+        _syncErrors[id] = error.toString();
         _saveTimers[id] = Timer(
-          const Duration(seconds: 4),
+          const Duration(seconds: 8),
           () => _flushCharacter(id),
         );
       }

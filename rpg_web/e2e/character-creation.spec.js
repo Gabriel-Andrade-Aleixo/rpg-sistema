@@ -15,7 +15,7 @@ test('cria, confirma no backend e exibe uma nova ficha', async ({ page, request 
       const payload = await registerResponse.json();
       token = payload.token;
       await page.addInitScript((session) => {
-        window.localStorage.setItem('rpg-auth-session', JSON.stringify(session));
+        window.sessionStorage.setItem('rpg-auth-session', JSON.stringify(session));
       }, { user: payload.user, token: payload.token, expiresAt: payload.expiresAt });
     } else {
       const loginResponse = await request.post('http://localhost:8787/auth/login', {
@@ -25,7 +25,7 @@ test('cria, confirma no backend e exibe uma nova ficha', async ({ page, request 
       const payload = await loginResponse.json();
       token = payload.token;
       await page.addInitScript((session) => {
-        window.localStorage.setItem('rpg-auth-session', JSON.stringify(session));
+        window.sessionStorage.setItem('rpg-auth-session', JSON.stringify(session));
       }, { user: payload.user, token: payload.token, expiresAt: payload.expiresAt });
     }
 

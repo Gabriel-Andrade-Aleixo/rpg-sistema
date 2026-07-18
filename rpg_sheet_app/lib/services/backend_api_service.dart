@@ -5,6 +5,17 @@ import 'package:http/http.dart' as http;
 import '../models/character.dart';
 import '../models/catalog_models.dart';
 
+class BackendApiException implements Exception {
+  const BackendApiException(this.statusCode, this.message, {this.details});
+
+  final int statusCode;
+  final String message;
+  final Map<String, dynamic>? details;
+
+  @override
+  String toString() => message;
+}
+
 class BackendApiService {
   BackendApiService({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
@@ -110,6 +121,17 @@ class BackendApiService {
     return CatalogEntry.fromJson(Map<String, dynamic>.from(created));
   }
 
+  Future<CatalogEntry> createGenericCatalogEntry(
+    Map<String, dynamic> entry,
+  ) async {
+    final data = await _post('/catalog/entries', {'entry': entry});
+    final created = data['entry'];
+    if (created is! Map) {
+      throw StateError('O backend não confirmou o cadastro.');
+    }
+    return CatalogEntry.fromJson(Map<String, dynamic>.from(created));
+  }
+
   Future<CatalogEntry> updateCatalogEntry(
     String kind,
     String id,
@@ -126,9 +148,46 @@ class BackendApiService {
     return CatalogEntry.fromJson(Map<String, dynamic>.from(updated));
   }
 
+  Future<CatalogEntry> updateGenericCatalogEntry(
+    String id,
+    Map<String, dynamic> entry,
+  ) async {
+    final data = await _put('/catalog/entries/${Uri.encodeComponent(id)}', {
+      'entry': entry,
+    });
+    final updated = data['entry'];
+    if (updated is! Map) {
+      throw StateError('O backend não confirmou a alteração.');
+    }
+    return CatalogEntry.fromJson(Map<String, dynamic>.from(updated));
+  }
+
   Future<void> deleteCatalogEntry(String kind, String id) async {
+    if (kind == 'generic') {
+      await _delete('/catalog/entries/${Uri.encodeComponent(id)}');
+      return;
+    }
     final resource = kind == 'spell' ? 'spells' : 'items';
     await _delete('/catalog/$resource/${Uri.encodeComponent(id)}');
+  }
+
+  Future<String> uploadMedia({
+    required List<int> bytes,
+    required String mimeType,
+    String alt = '',
+  }) async {
+    if (bytes.length > 2 * 1024 * 1024) {
+      throw const BackendApiException(413, 'A imagem deve ter no máximo 2 MB.');
+    }
+    final data = await _post('/media', {
+      'dataUrl': 'data:$mimeType;base64,${base64Encode(bytes)}',
+      'alt': alt,
+    });
+    final asset = data['asset'];
+    if (asset is! Map || asset['url'] == null) {
+      throw StateError('O backend não confirmou o envio da imagem.');
+    }
+    return asset['url'].toString();
   }
 
   Future<List<Character>> listCharacters() async {
@@ -270,7 +329,13 @@ class BackendApiService {
       final message = data is Map
           ? data['error']?.toString()
           : 'Backend respondeu ${response.statusCode}.';
-      throw StateError(message ?? 'Backend respondeu ${response.statusCode}.');
+      throw BackendApiException(
+        response.statusCode,
+        message ?? 'Backend respondeu ${response.statusCode}.',
+        details: data is Map && data['details'] is Map
+            ? Map<String, dynamic>.from(data['details'] as Map)
+            : null,
+      );
     }
     if (data is! Map) throw StateError('Resposta invalida do backend.');
     if (data['ok'] != true) {

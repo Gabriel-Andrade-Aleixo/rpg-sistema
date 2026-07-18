@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image as ImageIcon, LayoutDashboard, Package, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, UserRoundCog, X } from 'lucide-react';
+import { Image as ImageIcon, LayoutDashboard, Library, Package, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Upload, UserRoundCog, X } from 'lucide-react';
 import { catalogGroups, displayDescription, findEntry, parseRuleMetadata } from '../lib/catalogEngine';
 import RpgImage from './RpgImage';
 
 const emptyItem = { name: '', type: 'Armadura', armorCategory: 'Leve', description: '', bonusTarget: 'defense', bonusValue: 1, weight: 0, imageUrl: '' };
 const emptySpell = { name: '', school: 'Arcana', topic: 'Sem tópico', className: '', actionType: '', actionId: '', level: 0, description: '', manaCost: 0, focusCost: 0, humanityCost: 0, range: '', damage: '', imageUrl: '' };
+const emptyGeneric = { name: '', category: 'Classes', description: '', labels: '', metadataText: '{}', imageUrl: '' };
 
-export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem, onLoadAdminDirectory, onTransferCharacterOwner, onResetUserPassword }) {
+export default function AdminView({ catalog, characters, onRefresh, onSaveCatalogEntry, onDeleteCatalogEntry, onCreateItem, onUploadMedia, onLoadAdminDirectory, onTransferCharacterOwner, onResetUserPassword }) {
   const [tab, setTab] = useState('overview');
   const [editor, setEditor] = useState(null);
   const [search, setSearch] = useState('');
@@ -32,7 +33,7 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     ['Sem imagem', withoutImage, 'images'],
     ['Fichas inconsistentes', invalid, 'warning'],
   ];
-  const activeEntries = tab === 'spells' ? groups.spells : groups.items;
+  const activeEntries = tab === 'spells' ? groups.spells : tab === 'catalog' ? catalog.entries : groups.items;
   const filtered = useMemo(() => activeEntries.filter((entry) => entry.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))), [activeEntries, search]);
 
   useEffect(() => {
@@ -40,12 +41,12 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   }, [tab]);
 
   function beginCreate(kind) {
-    setEditor({ kind, id: '', value: kind === 'spell' ? { ...emptySpell } : { ...emptyItem } });
+    setEditor({ kind, id: '', value: kind === 'spell' ? { ...emptySpell } : kind === 'generic' ? { ...emptyGeneric } : { ...emptyItem } });
     setMessage('');
   }
 
   function beginEdit(kind, entry) {
-    setEditor({ kind, id: entry.id, value: kind === 'spell' ? spellFromEntry(entry) : itemFromEntry(entry) });
+    setEditor({ kind, id: entry.id, value: kind === 'spell' ? spellFromEntry(entry) : kind === 'generic' ? genericFromEntry(entry) : itemFromEntry(entry) });
     setMessage('');
   }
 
@@ -55,9 +56,12 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     setSubmitting(true);
     setMessage('');
     try {
-      if (onSaveCatalogEntry) await onSaveCatalogEntry(editor.kind, editor.value, editor.id);
+      const value = editor.kind === 'generic'
+        ? { ...editor.value, metadata: JSON.parse(editor.value.metadataText || '{}') }
+        : editor.value;
+      if (onSaveCatalogEntry) await onSaveCatalogEntry(editor.kind, value, editor.id);
       else if (editor.kind === 'item' && onCreateItem) await onCreateItem(editor.value);
-      setMessage(`${editor.kind === 'spell' ? 'Magia' : 'Item'} ${editor.id ? 'atualizado' : 'criado'} na biblioteca oficial.`);
+      setMessage(`${editor.kind === 'spell' ? 'Magia' : editor.kind === 'generic' ? 'Cadastro' : 'Item'} ${editor.id ? 'atualizado' : 'criado'} na biblioteca oficial.`);
       setEditor(null);
     } catch (error) {
       setMessage(error.message);
@@ -137,6 +141,7 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
       <button className={tab === 'overview' ? 'active' : ''} onClick={() => { setTab('overview'); setEditor(null); }}><LayoutDashboard aria-hidden="true" />Visão geral</button>
       <button className={tab === 'items' ? 'active' : ''} onClick={() => { setTab('items'); setEditor(null); }}><Package aria-hidden="true" />Itens <span>{groups.items.length}</span></button>
       <button className={tab === 'spells' ? 'active' : ''} onClick={() => { setTab('spells'); setEditor(null); }}><Sparkles aria-hidden="true" />Magias <span>{groups.spells.length}</span></button>
+      <button className={tab === 'catalog' ? 'active' : ''} onClick={() => { setTab('catalog'); setEditor(null); }}><Library aria-hidden="true" />Catálogo <span>{catalog.entries.length}</span></button>
       <button className={tab === 'ownership' ? 'active' : ''} onClick={() => { setTab('ownership'); setEditor(null); }}><UserRoundCog aria-hidden="true" />Fichas <span>{adminCharacters.length || characters.length}</span></button>
     </nav>
     {message && <p className={/criado|atualizado|removido|transferida|redefinida/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
@@ -145,11 +150,11 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
       <section className="adminDiagnostic"><div><h3>Qualidade do catálogo</h3><p>{invalid ? `${invalid} ficha(s) precisam de revisão de raça ou classe.` : 'As fichas estão consistentes com o catálogo atual.'}</p></div><div><strong>{catalog.board?.name || 'RPG Supabase'}</strong><span>Fonte oficial no Supabase</span></div></section>
     </> : tab === 'ownership' ? <OwnershipManager catalog={catalog} users={adminUsers} characters={adminCharacters} ownerSelection={ownerSelection} setOwnerSelection={setOwnerSelection} loading={directoryLoading} submitting={submitting} onRefresh={loadDirectory} onTransfer={transfer} onResetPassword={resetUserPassword} /> : <div className={`catalogManager ${editor ? 'editing' : ''}`}>
       <section className="catalogManagerList">
-        <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}`} placeholder={`Buscar ${tab === 'spells' ? 'magias' : 'itens'}...`} value={search} onChange={(event) => setSearch(event.target.value)} /></label><button className="primaryButton" onClick={() => beginCreate(tab === 'spells' ? 'spell' : 'item')}><Plus aria-hidden="true" />Novo</button></div>
-        <div className="managerEntries">{filtered.map((entry) => <article className="managerEntry" key={entry.id}><RpgImage src={entry.imageUrl} alt="" className="managerThumb" fallback={<ImageIcon aria-hidden="true" />} /><div><strong>{entry.name}</strong><span>{entry.labels?.map((label) => label.name).filter(Boolean).slice(0, 2).join(' · ') || entry.category}</span><p>{summaryFromEntry(entry)}</p></div><div className="managerEntryActions"><button className="iconButton" title="Editar" aria-label={`Editar ${entry.name}`} onClick={() => beginEdit(tab === 'spells' ? 'spell' : 'item', entry)}><Pencil aria-hidden="true" /></button><button className="iconButton dangerButton" title="Excluir" aria-label={`Excluir ${entry.name}`} onClick={() => remove(tab === 'spells' ? 'spell' : 'item', entry)}><Trash2 aria-hidden="true" /></button></div></article>)}</div>
+        <div className="managerToolbar"><label className="searchField"><Search aria-hidden="true" /><input aria-label={`Buscar ${tab === 'spells' ? 'magias' : tab === 'catalog' ? 'catálogo' : 'itens'}`} placeholder={`Buscar ${tab === 'spells' ? 'magias' : tab === 'catalog' ? 'catálogo' : 'itens'}...`} value={search} onChange={(event) => setSearch(event.target.value)} /></label><button className="primaryButton" onClick={() => beginCreate(tab === 'spells' ? 'spell' : tab === 'catalog' ? 'generic' : 'item')}><Plus aria-hidden="true" />Novo</button></div>
+        <div className="managerEntries">{filtered.map((entry) => { const kind = tab === 'spells' ? 'spell' : tab === 'catalog' ? 'generic' : 'item'; return <article className="managerEntry" key={entry.id}><RpgImage src={entry.imageUrl} alt="" className="managerThumb" fallback={<ImageIcon aria-hidden="true" />} /><div><strong>{entry.name}</strong><span>{entry.category} · {entry.labels?.map((label) => label.name).filter(Boolean).slice(0, 2).join(' · ')}</span><p>{summaryFromEntry(entry)}</p></div><div className="managerEntryActions"><button className="iconButton" title="Editar" aria-label={`Editar ${entry.name}`} onClick={() => beginEdit(kind, entry)}><Pencil aria-hidden="true" /></button><button className="iconButton dangerButton" title="Excluir" aria-label={`Excluir ${entry.name}`} onClick={() => remove(kind, entry)}><Trash2 aria-hidden="true" /></button></div></article>; })}</div>
         {!filtered.length && <div className="managerEmpty"><span>{search ? 'Nenhum resultado para esta busca.' : `Nenhum ${tab === 'spells' ? 'feitiço' : 'item'} cadastrado.`}</span></div>}
       </section>
-      {editor && <CatalogEditor editor={editor} setEditor={setEditor} onSubmit={save} submitting={submitting} />}
+      {editor && <CatalogEditor editor={editor} setEditor={setEditor} onSubmit={save} onUploadMedia={onUploadMedia} submitting={submitting} />}
     </div>}
   </section>;
 }
@@ -196,20 +201,43 @@ function OwnershipManager({ catalog, users, characters, ownerSelection, setOwner
   </section>;
 }
 
-function CatalogEditor({ editor, setEditor, onSubmit, submitting }) {
+function CatalogEditor({ editor, setEditor, onSubmit, onUploadMedia, submitting }) {
   const { kind, value } = editor;
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const set = (field, next) => setEditor({ ...editor, value: { ...value, [field]: next } });
-  return <aside className="catalogEditor"><div className="editorHeader"><div><span className="eyebrow">{editor.id ? 'Editar' : 'Novo cadastro'}</span><h3>{kind === 'spell' ? 'Magia' : 'Item oficial'}</h3></div><button className="iconButton" type="button" title="Fechar editor" onClick={() => setEditor(null)}><X aria-hidden="true" /></button></div>
+  async function upload(event) {
+    const file = event.target.files?.[0];
+    if (!file || !onUploadMedia) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      const asset = await onUploadMedia(file, value.name || 'Imagem do catálogo');
+      set('imageUrl', asset.url);
+    } catch (error) {
+      setUploadError(error.message);
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  }
+  return <aside className="catalogEditor"><div className="editorHeader"><div><span className="eyebrow">{editor.id ? 'Editar' : 'Novo cadastro'}</span><h3>{kind === 'spell' ? 'Magia' : kind === 'generic' ? 'Cadastro oficial' : 'Item oficial'}</h3></div><button className="iconButton" type="button" title="Fechar editor" onClick={() => setEditor(null)}><X aria-hidden="true" /></button></div>
     <form className="catalogEditorForm" onSubmit={onSubmit}>
       <label>Nome<input required minLength="2" value={value.name} onChange={(event) => set('name', event.target.value)} /></label>
-      {kind === 'item' ? <ItemFields value={value} set={set} /> : <SpellFields value={value} set={set} />}
+      {kind === 'item' ? <ItemFields value={value} set={set} /> : kind === 'spell' ? <SpellFields value={value} set={set} /> : <GenericFields value={value} set={set} />}
       {kind === 'spell' && <div className="formPair"><label>Tópico<input value={value.topic} onChange={(event) => set('topic', event.target.value)} /></label><label>Classe indicada<input value={value.className} onChange={(event) => set('className', event.target.value)} /></label></div>}
       <label>Descrição<textarea rows="5" value={value.description} onChange={(event) => set('description', event.target.value)} /></label>
       <label>URL da imagem<input type="url" placeholder="https://..." value={value.imageUrl} onChange={(event) => set('imageUrl', event.target.value)} /></label>
+      {onUploadMedia && <label className="uploadButton"><Upload aria-hidden="true" /><span>{uploading ? 'Enviando imagem...' : 'Enviar imagem (até 2 MB)'}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploading} onChange={upload} /></label>}
+      {uploadError && <p className="validationError">{uploadError}</p>}
       <div className="imagePreview"><RpgImage src={value.imageUrl} alt="Prévia" fallback={<><ImageIcon aria-hidden="true" /><span>Prévia da imagem</span></>} /></div>
-      <button className="primaryButton" disabled={submitting} type="submit">{submitting ? 'Salvando...' : editor.id ? 'Salvar alterações' : `Criar ${kind === 'spell' ? 'magia' : 'item'}`}</button>
+      <button className="primaryButton" disabled={submitting || uploading} type="submit">{submitting ? 'Salvando...' : editor.id ? 'Salvar alterações' : `Criar ${kind === 'spell' ? 'magia' : kind === 'generic' ? 'cadastro' : 'item'}`}</button>
     </form>
   </aside>;
+}
+
+function GenericFields({ value, set }) {
+  return <><label>Categoria<select value={value.category} onChange={(event) => set('category', event.target.value)}><option>Classes</option><option>Racas</option><option>Criaturas e Monstros</option><option>Habilidades</option><option>Proficiências</option><option>Atributos</option><option>Perícias</option><option>Sistema</option><option>Itens</option><option>Equipamentos</option><option>Magias</option></select></label><label>Etiquetas<input value={value.labels} onChange={(event) => set('labels', event.target.value)} placeholder="Separe por vírgulas" /></label><label>Metadados estruturados<textarea className="codeInput" rows="10" spellCheck="false" value={value.metadataText} onChange={(event) => set('metadataText', event.target.value)} /></label></>;
 }
 
 function ItemFields({ value, set }) {
@@ -233,6 +261,19 @@ function spellFromEntry(entry) {
   const metadata = parseRuleMetadata(entry) || {};
   const schools = { arcana: 'Arcana', divina: 'Divina', espectral: 'Espectral', elemental: 'Elemental', demoniaca: 'Demoníaca', natural: 'Natural', outra: 'Outra' };
   return { ...emptySpell, name: entry.name, school: schools[metadata.school] || 'Outra', topic: metadata.topic || 'Sem tópico', className: metadata.className || '', actionType: metadata.actionType || '', actionId: metadata.actionId || '', level: Number(metadata.level || 0), description: summaryFromEntry(entry), manaCost: Number(metadata.costs?.mana || 0), focusCost: Number(metadata.costs?.focus || 0), humanityCost: Number(metadata.costs?.humanity || 0), range: metadata.range || '', damage: metadata.damage || '', imageUrl: entry.imageUrl || '' };
+}
+
+function genericFromEntry(entry) {
+  const metadata = parseRuleMetadata(entry) || entry.metadata || {};
+  return {
+    ...emptyGeneric,
+    name: entry.name,
+    category: entry.category,
+    description: displayDescription(entry),
+    labels: (entry.labels || []).map((label) => label.name).filter(Boolean).join(', '),
+    metadataText: JSON.stringify(metadata, null, 2),
+    imageUrl: entry.imageUrl || '',
+  };
 }
 
 function summaryFromEntry(entry) {

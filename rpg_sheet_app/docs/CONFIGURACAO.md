@@ -15,6 +15,8 @@ O backend expõe autenticação, personagens e o catálogo oficial salvo no Supa
 
 ```env
 DATABASE_URL=postgresql://...
+DATABASE_POOL_MAX=1
+ALLOWED_ORIGINS=http://localhost:3000,https://seu-site.vercel.app
 PASSWORD_RESET_BASE_URL=http://localhost:3000
 AUTH_EXPOSE_RESET_TOKEN=true
 SMTP_HOST=smtp.seu-provedor.com
@@ -25,7 +27,13 @@ SMTP_PASS=sua-senha-ou-app-password
 MAIL_FROM="Runalith RPG <usuario@dominio.com>"
 ```
 
-Use `AUTH_EXPOSE_RESET_TOKEN=true` apenas em desenvolvimento ou enquanto ainda não houver envio real de email. Em produção, deixe desativado e conecte um provedor SMTP para entregar o link/token de recuperação. Se as variáveis `SMTP_*`/`MAIL_FROM` não estiverem configuradas no backend ou na Vercel, a tela avisará que o pedido foi registrado, mas o email ainda não foi enviado.
+Use `AUTH_EXPOSE_RESET_TOKEN=true` somente em desenvolvimento. Em produção, deixe desativado. A redefinição de senha disponível na interface é feita pelo Mestre e encerra todas as sessões antigas do usuário.
+
+Antes de iniciar o backend após uma atualização de esquema:
+
+```bash
+npm run db:migrate
+```
 
 ## Flutter
 
@@ -48,7 +56,7 @@ Em um celular físico, troque `localhost` pelo IP do computador na rede local. S
 ## Fonte oficial
 
 - Raças, classes, itens, equipamentos, habilidades e proficiências são lidos do catálogo oficial no Supabase.
-- Imagens usam a URL cadastrada no item/magia; sem imagem, o app mostra um fallback visual.
+- O Mestre pode enviar imagens PNG, JPEG, WebP ou GIF de até 2 MB, ou informar uma URL HTTPS; sem imagem, o app mostra um fallback visual.
 - Regras ausentes permanecem indisponíveis e geram aviso. O app não cria valores genéricos.
 - Personagens são salvos em JSONB na tabela `characters`, com histórico em `character_revisions`.
 - Contas ficam em `rpg_users`, sessões em `auth_sessions` e recuperação de senha em `password_reset_tokens`.

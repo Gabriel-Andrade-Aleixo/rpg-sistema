@@ -28,7 +28,7 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   };
 
   await page.addInitScript((session) => {
-    window.localStorage.setItem('rpg-auth-session', JSON.stringify(session));
+    window.sessionStorage.setItem('rpg-auth-session', JSON.stringify(session));
   }, {
     token: 'e2e-admin-token',
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),

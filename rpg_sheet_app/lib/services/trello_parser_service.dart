@@ -63,6 +63,12 @@ class TrelloParserService {
             'attributeRoll',
             selected?['attributeRollBonuses'],
           ),
+          ..._metadataModifiers(
+            entry,
+            'race',
+            'skillMinimum',
+            metadata?['skillMinimums'],
+          ),
         ],
         proficiencies: List<String>.from(
           (metadata?['proficiencies'] as List?) ?? [],
@@ -91,6 +97,7 @@ class TrelloParserService {
                 name: selected['name']?.toString() ?? '',
                 traits: List<String>.from((selected['traits'] as List?) ?? []),
               ),
+        mechanics: Map<String, dynamic>.from(metadata ?? const {}),
       );
     }
     final lines = _lines(entry.description);
@@ -171,6 +178,11 @@ class TrelloParserService {
         resourceRules: resources,
         unlocks: _levelUnlocks(_lines(entry.description)),
         defenseFormula: _metadataFormula(metadata?['defense']),
+        conditionalDefenseFormula: _metadataFormula(
+          metadata?['conditionalDefense'] is Map
+              ? (metadata?['conditionalDefense'] as Map)['enemyWithinTwoMeters']
+              : null,
+        ),
         hpInitialFormula: _metadataFormula(hp['initial']),
         hpFixedFormula: _metadataFormula(perLevel['fixed']),
         hpRollFormula: _metadataFormula(perLevel['roll']),
@@ -181,6 +193,7 @@ class TrelloParserService {
           (metadata?['allowedCombatXpAttributes'] as List?) ?? [],
         ),
         hasStructuredRules: true,
+        mechanics: Map<String, dynamic>.from(metadata ?? const {}),
       );
     }
     final lines = _lines(entry.description);

@@ -6,7 +6,7 @@ import { query, transaction } from './postgres.js';
 
 const pbkdf2 = promisify(crypto.pbkdf2);
 const PASSWORD_ITERATIONS = 210_000;
-const SESSION_DAYS = 30;
+const SESSION_DAYS = Math.max(1, Math.min(30, Number(process.env.SESSION_DAYS || 7)));
 const RESET_MINUTES = 30;
 
 export async function registerUser({ email, password, displayName }) {

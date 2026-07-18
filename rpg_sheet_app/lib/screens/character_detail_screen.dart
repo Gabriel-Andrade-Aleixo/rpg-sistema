@@ -153,6 +153,11 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       1 => <Widget>[
         if (normalizeCatalogText(_class?.name ?? '') == 'arqueiro espectral')
           SectionCard(title: 'Flecha Mágica', child: _infusionSection()),
+        if (_hasRuleContext)
+          SectionCard(
+            title: 'Contexto de regras',
+            child: _ruleContextSection(),
+          ),
         SectionCard(title: 'Atributos', child: _attributeSection()),
         SectionCard(
           title: 'Proficiências e perícias',
@@ -241,7 +246,22 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     return ListView(
       key: PageStorageKey('character_tab_$_tabIndex'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      children: [_header(), const SizedBox(height: 12), ...sections],
+      children: [
+        _header(),
+        if (widget.repository.syncError(_character.id).isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: ListTile(
+              leading: const Icon(Icons.sync_problem_outlined),
+              title: const Text('Sincronização pendente'),
+              subtitle: Text(widget.repository.syncError(_character.id)),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        ...sections,
+      ],
     );
   }
 
@@ -325,12 +345,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     title: 'Vida e recursos',
     child: Column(
       children: [
-        _resourceControl(
-          'Vida',
-          _character.currentHp,
-          _character.maxHp,
-          (value) => _persist(_deathSaves.changeHitPoints(_character, value)),
-        ),
+        _healthControl(),
         const SizedBox(height: 16),
         _resourceControl(
           'Mana',
@@ -365,6 +380,243 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       ],
     ),
   );
+
+  Widget _healthControl() {
+    final maximum = _character.maxHp.clamp(0, 999999);
+    final current = _character.currentHp.clamp(0, maximum);
+    final mechanics = _race == null
+        ? const <String, dynamic>{}
+        : _parser.parseRace(_race!, _character.raceVariant).mechanics;
+    final reduction = ((mechanics['damageReduction'] as List?) ?? const [])
+        .whereType<Map>()
+        .where((rule) => rule['type']?.toString() == 'physical')
+        .fold<int>(
+          0,
+          (total, rule) => total + ((rule['value'] as num?)?.toInt() ?? 0),
+        );
+    final healingCap = (mechanics['healingCapPercent'] as num?)?.toInt() ?? 100;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Vida',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text('$current/$maximum'),
+            IconButton(
+              tooltip: 'Ajustar vida',
+              onPressed: maximum <= 0
+                  ? null
+                  : () => _showHealthAdjustment(
+                      reduction: reduction,
+                      healingCap: healingCap,
+                    ),
+              icon: const Icon(Icons.tune),
+            ),
+          ],
+        ),
+        LinearProgressIndicator(
+          value: maximum == 0 ? 0 : current / maximum,
+          minHeight: 8,
+        ),
+        if (reduction > 0) ...[
+          const SizedBox(height: 6),
+          Text('Dano físico recebido é reduzido em $reduction.'),
+        ],
+        if (healingCap < 100) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Curas comuns alcançam no máximo $healingCap% da vida. Descanso longo cura tudo.',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _showHealthAdjustment({
+    required int reduction,
+    required int healingCap,
+  }) async {
+    final amount = TextEditingController(text: '1');
+    var damageType = 'physical';
+    final operation = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Ajustar Vida'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: amount,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantidade'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: damageType,
+                decoration: const InputDecoration(labelText: 'Tipo de dano'),
+                items: const [
+                  DropdownMenuItem(value: 'physical', child: Text('Físico')),
+                  DropdownMenuItem(value: 'magical', child: Text('Mágico')),
+                  DropdownMenuItem(value: 'divine', child: Text('Divino')),
+                  DropdownMenuItem(value: 'other', child: Text('Outro')),
+                ],
+                onChanged: (value) =>
+                    setDialogState(() => damageType = value ?? 'physical'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context, 'damage:$damageType'),
+              child: const Text('Aplicar dano'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context, 'heal'),
+              child: const Text('Curar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'rest'),
+              child: const Text('Descanso longo'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final value = int.tryParse(amount.text) ?? 0;
+    amount.dispose();
+    if (operation == null || value <= 0) return;
+    final maximum = _character.maxHp;
+    var target = _character.currentHp;
+    if (operation.startsWith('damage:')) {
+      final physical = operation == 'damage:physical';
+      target -= (value - (physical ? reduction : 0)).clamp(0, value);
+    } else if (operation == 'rest') {
+      target = maximum;
+    } else {
+      final cap = (maximum * healingCap / 100).floor();
+      target = (target + value).clamp(0, cap);
+    }
+    await _persist(
+      _deathSaves.changeHitPoints(_character, target.clamp(0, maximum)),
+    );
+  }
+
+  bool get _hasRuleContext {
+    final race = _race == null
+        ? null
+        : _parser.parseRace(_race!, _character.raceVariant);
+    final characterClass = _class == null ? null : _parser.parseClass(_class!);
+    final mechanics = race?.mechanics ?? const <String, dynamic>{};
+    return characterClass?.conditionalDefenseFormula != null ||
+        mechanics['conditionalRollBonuses'] is List ||
+        mechanics['environmentEffects'] is List ||
+        mechanics['conditionalCosts'] is List ||
+        mechanics['statusEffects'] is List;
+  }
+
+  Widget _ruleContextSection() {
+    final race = _race == null
+        ? null
+        : _parser.parseRace(_race!, _character.raceVariant);
+    final characterClass = _class == null ? null : _parser.parseClass(_class!);
+    final mechanics = race?.mechanics ?? const <String, dynamic>{};
+    final options = <({String id, String label, String description})>[];
+    if (characterClass?.conditionalDefenseFormula != null) {
+      options.add((
+        id: 'enemyWithinTwoMeters',
+        label: 'Inimigo a menos de 2 m',
+        description: 'Ativa a Defesa Adaptativa da classe.',
+      ));
+    }
+    if (((mechanics['conditionalRollBonuses'] as List?) ?? const []).any(
+      (rule) => rule is Map && rule['condition'] == 'dark_or_night',
+    )) {
+      options.add((
+        id: 'darkOrNight',
+        label: 'Escuro ou noite',
+        description: 'Ativa bônus raciais condicionais de rolagem.',
+      ));
+    }
+    final environments = (mechanics['environmentEffects'] as List?) ?? const [];
+    if (environments.any(
+      (rule) => rule is Map && rule['environment'] == 'quente',
+    )) {
+      options.add((
+        id: 'hotEnvironment',
+        label: 'Ambiente quente',
+        description: 'Aplica a penalidade racial de deslocamento.',
+      ));
+    }
+    if (environments.any(
+      (rule) => rule is Map && rule['environment'] == 'gelo',
+    )) {
+      options.add((
+        id: 'coldEnvironment',
+        label: 'Ambiente gelado',
+        description: 'Aplica a penalidade racial de deslocamento.',
+      ));
+    }
+    if (mechanics['conditionalCosts'] is List) {
+      options.add((
+        id: 'withoutSunlight',
+        label: 'Sem luz solar',
+        description: 'O Mestre define o custo adicional de Humanidade.',
+      ));
+    }
+    if (mechanics['statusEffects'] is List) {
+      options.add((
+        id: 'blinded',
+        label: 'Cegueira',
+        description: 'Aplica o lembrete de dano racial por turno.',
+      ));
+    }
+    final activeEffects = <String>[
+      if (_character.combatContext['hotEnvironment'] == true)
+        'Deslocamento: -2 m em ambiente quente.',
+      if (_character.combatContext['coldEnvironment'] == true)
+        'Deslocamento: -2 m em ambiente gelado.',
+      if (_character.combatContext['withoutSunlight'] == true)
+        'Custo adicional de Humanidade definido pelo Mestre.',
+      if (_character.combatContext['blinded'] == true)
+        'Cegueira: 1d4 de dano físico por turno.',
+    ];
+    return Column(
+      children: [
+        for (final option in options)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(option.label),
+            subtitle: Text(option.description),
+            value: _character.combatContext[option.id] == true,
+            onChanged: (value) => _persist(
+              _character.copyWith(
+                combatContext: {..._character.combatContext, option.id: value},
+              ),
+            ),
+          ),
+        if (activeEffects.isNotEmpty) ...[
+          const Divider(),
+          for (final effect in activeEffects)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.rule_outlined),
+              title: Text(effect),
+            ),
+        ],
+      ],
+    );
+  }
 
   Widget _resourceControl(
     String label,
@@ -1488,7 +1740,11 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
             Chip(label: Text('Acerto divino +$accuracyBonus')),
             if (_humanity.getFaithDamageBonus(_character))
-              const Chip(label: Text('Dano divino +Fé')),
+              Chip(
+                label: Text(
+                  'Dano divino +${_humanity.faithDamageBonus(_character)} (Fé / 2)',
+                ),
+              ),
             if (!status.playable)
               const Chip(label: Text('Personagem injogável')),
           ],
@@ -1838,13 +2094,21 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                     normalizeCatalogText(item) ==
                     normalizeCatalogText(entry.name),
               );
-              final rollValue = value + (proficient ? value : 0);
+              final conditionalBonus = _character.modifiers
+                  .where(
+                    (item) =>
+                        item.targetType == 'skillRoll' &&
+                        item.targetId == normalizeCatalogText(entry.name),
+                  )
+                  .fold<int>(0, (total, item) => total + item.value.round());
+              final rollValue =
+                  value + (proficient ? value : 0) + conditionalBonus;
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(child: Text('+$rollValue')),
                 title: Text(entry.name),
                 subtitle: Text(
-                  '${proficient ? 'Proficiente · valor bruto +$value · ' : ''}${skill.terms.map((term) => '${AttributeId.values.firstWhere((item) => item.name == term.attributeId).label} ${(term.weight * 100).round()}%').join(' • ')}',
+                  '${proficient ? 'Proficiente · valor bruto +$value · ' : ''}${conditionalBonus > 0 ? 'Bônus condicional +$conditionalBonus · ' : ''}${skill.terms.map((term) => '${AttributeId.values.firstWhere((item) => item.name == term.attributeId).label} ${(term.weight * 100).round()}%').join(' • ')}',
                 ),
                 trailing: IconButton(
                   tooltip: 'Rolar ${entry.name}',
@@ -1909,7 +2173,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
 
   Widget _defenseSection() {
     final parsedClass = _class == null ? null : _parser.parseClass(_class!);
-    final formula = parsedClass?.defenseFormula;
+    final adaptive =
+        _character.combatContext['enemyWithinTwoMeters'] == true &&
+        parsedClass?.conditionalDefenseFormula != null;
+    final formula = adaptive
+        ? parsedClass?.conditionalDefenseFormula
+        : parsedClass?.defenseFormula;
     final defense = _combat.defense(_character, formula);
     final armorClass = _combat.armorClass(_character, formula);
     final terms = formula?.terms.entries.map((entry) {
@@ -1950,6 +2219,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           },
         ),
         const SizedBox(height: 10),
+        if (adaptive) ...[
+          const Chip(label: Text('Defesa Adaptativa ativa')),
+          const SizedBox(height: 8),
+        ],
         Text('$formulaText\nCA = 10 + Defesa + bônus direto de CA'),
         if (equipment.isNotEmpty) ...[
           const SizedBox(height: 10),

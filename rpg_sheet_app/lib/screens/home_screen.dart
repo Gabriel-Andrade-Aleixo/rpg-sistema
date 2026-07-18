@@ -329,6 +329,8 @@ class _HomeScreenState extends State<HomeScreen> {
         onResetUserPassword: (userId, password) async {
           await widget.authRepository.resetAdminUserPassword(userId, password);
         },
+        onUploadMedia: (bytes, mimeType, alt) => widget.catalogRepository
+            .uploadMedia(bytes: bytes, mimeType: mimeType, alt: alt),
         onRefresh: () async {
           setState(() => _reload(refreshCatalog: true));
           await _future;

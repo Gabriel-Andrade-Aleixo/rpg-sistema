@@ -39,9 +39,13 @@ class CatalogRepository {
       throw StateError('Configure BACKEND_URL para gerenciar o catálogo.');
     }
     final saved = id == null || id.isEmpty
-        ? kind == 'spell'
+        ? kind == 'generic'
+              ? await _backend.createGenericCatalogEntry(entry)
+              : kind == 'spell'
               ? await _backend.createCatalogSpell(entry)
               : await _backend.createCatalogItem(entry)
+        : kind == 'generic'
+        ? await _backend.updateGenericCatalogEntry(id, entry)
         : await _backend.updateCatalogEntry(kind, id, entry);
     _cache = null;
     return saved;
@@ -54,4 +58,10 @@ class CatalogRepository {
     await _backend.deleteCatalogEntry(kind, id);
     _cache = null;
   }
+
+  Future<String> uploadMedia({
+    required List<int> bytes,
+    required String mimeType,
+    String alt = '',
+  }) => _backend.uploadMedia(bytes: bytes, mimeType: mimeType, alt: alt);
 }

@@ -6,7 +6,8 @@ let authToken = '';
 export function loadStoredSession() {
   if (typeof window === 'undefined') return null;
   try {
-    const session = JSON.parse(window.localStorage.getItem(sessionKey) || 'null');
+    window.localStorage.removeItem(sessionKey);
+    const session = JSON.parse(window.sessionStorage.getItem(sessionKey) || 'null');
     authToken = session?.token || '';
     return session;
   } catch {
@@ -17,8 +18,9 @@ export function loadStoredSession() {
 export function storeSession(session) {
   authToken = session?.token || '';
   if (typeof window !== 'undefined') {
-    if (session?.token) window.localStorage.setItem(sessionKey, JSON.stringify(session));
-    else window.localStorage.removeItem(sessionKey);
+    window.localStorage.removeItem(sessionKey);
+    if (session?.token) window.sessionStorage.setItem(sessionKey, JSON.stringify(session));
+    else window.sessionStorage.removeItem(sessionKey);
   }
 }
 
@@ -45,6 +47,7 @@ async function request(path, options = {}) {
   if (!response.ok || data.ok !== true) {
     const error = new Error(data.error || `Backend respondeu ${response.status}`);
     error.status = response.status;
+    error.details = data.details || null;
     throw error;
   }
   return data;
@@ -166,6 +169,45 @@ export async function updateCatalogEntry(kind, id, entry) {
 export async function deleteCatalogEntry(kind, id) {
   const resource = kind === 'spell' ? 'spells' : 'items';
   return request(`/catalog/${resource}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function createGenericCatalogEntry(entry) {
+  const data = await request('/catalog/entries', {
+    method: 'POST',
+    body: JSON.stringify({ entry }),
+  });
+  if (!data.entry?.id) throw new Error('O backend não confirmou o cadastro.');
+  return data.entry;
+}
+
+export async function updateGenericCatalogEntry(id, entry) {
+  const data = await request(`/catalog/entries/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ entry }),
+  });
+  if (!data.entry?.id) throw new Error('O backend não confirmou a alteração.');
+  return data.entry;
+}
+
+export async function deleteGenericCatalogEntry(id) {
+  return request(`/catalog/entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function uploadMedia(file, alt = '') {
+  if (!file) throw new Error('Selecione uma imagem.');
+  if (file.size > 2 * 1024 * 1024) throw new Error('A imagem deve ter no máximo 2 MB.');
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.readAsDataURL(file);
+  });
+  const data = await request('/media', {
+    method: 'POST',
+    body: JSON.stringify({ dataUrl, alt }),
+  });
+  if (!data.asset?.url) throw new Error('O backend não confirmou o envio da imagem.');
+  return data.asset;
 }
 
 export async function saveCharacter(character, { baseRevision, changedFields } = {}) {

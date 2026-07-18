@@ -14,9 +14,9 @@ import {
 } from './lib/authStore.js';
 import {
   deleteCatalogEntryById,
+  defaultCategories,
   ensureCatalogCategories,
   getCharacterForUserFromDatabase,
-  getCharacterOwnershipFromDatabase,
   listCharactersForAdminFromDatabase,
   insertCatalogEntry,
   listOwnedCharactersFromDatabase,
@@ -28,18 +28,22 @@ import {
   deleteCharacterForUserFromDatabase,
   transferCharacterOwnershipInDatabase,
   updateCatalogEntryById,
+  replaceMetadataBlock,
 } from './lib/catalogStore.js';
+import { validateAndNormalizeCharacter } from './lib/characterRules.js';
+import { clearRateLimit, enforceRateLimit, requestIp } from './lib/rateLimit.js';
+import { createMediaAsset, deleteMediaAsset, getMediaAsset } from './lib/mediaStore.js';
 
 loadDotEnv();
 
 const PORT = Number(process.env.PORT || 8787);
-const characterWriteQueues = new Map();
-
 let catalogCache = null;
 let catalogCachedAt = 0;
 
 export async function requestHandler(req, res) {
-  setCorsHeaders(res);
+  if (!setCorsHeaders(req, res)) {
+    return sendJson(res, 403, { ok: false, error: 'Origem não autorizada.' });
+  }
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -57,13 +61,16 @@ export async function requestHandler(req, res) {
 
     if (req.method === 'POST' && path === '/auth/register') {
       const body = await readJson(req);
+      await limitAuthentication(req, 'register', body.email, 4, 60 * 60);
       const auth = await registerUser(body);
       return sendJson(res, 201, { ok: true, user: publicUser(auth.user), token: auth.token, expiresAt: auth.expiresAt });
     }
 
     if (req.method === 'POST' && path === '/auth/login') {
       const body = await readJson(req);
+      await limitAuthentication(req, 'login', body.email, 8, 15 * 60);
       const auth = await loginUser(body);
+      await clearRateLimit('login:email', String(body.email || '').trim().toLowerCase().slice(0, 180));
       return sendJson(res, 200, { ok: true, user: publicUser(auth.user), token: auth.token, expiresAt: auth.expiresAt });
     }
 
@@ -79,6 +86,7 @@ export async function requestHandler(req, res) {
 
     if (req.method === 'POST' && path === '/auth/password/request') {
       const body = await readJson(req);
+      await limitAuthentication(req, 'password_request', body.email, 4, 60 * 60);
       const reset = await createPasswordReset(body);
       return sendJson(res, 200, {
         ok: true,
@@ -90,6 +98,10 @@ export async function requestHandler(req, res) {
 
     if (req.method === 'POST' && path === '/auth/password/reset') {
       const body = await readJson(req);
+      await enforceRateLimit('password_reset:ip', requestIp(req), {
+        maximum: 8,
+        windowSeconds: 60 * 60,
+      });
       await resetPassword(body);
       return sendJson(res, 200, { ok: true });
     }
@@ -141,6 +153,56 @@ export async function requestHandler(req, res) {
     if (req.method === 'GET' && path === '/catalog') {
       const refresh = url.searchParams.get('refresh') === 'true';
       return sendJson(res, 200, { ok: true, catalog: await loadCatalog(refresh) });
+    }
+
+    const mediaMatch = path.match(/^\/media\/([0-9a-f-]{36})$/i);
+    if (mediaMatch && req.method === 'GET') {
+      const asset = await getMediaAsset(mediaMatch[1]);
+      if (!asset) throw new AppError('Imagem não encontrada.', 404);
+      res.writeHead(200, {
+        'Content-Type': asset.mime_type,
+        'Content-Length': asset.byte_size,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      res.end(asset.content);
+      return;
+    }
+
+    if (req.method === 'POST' && path === '/media') {
+      const admin = await requireAdmin(req);
+      const body = await readJson(req);
+      const asset = await createMediaAsset({ ...body, uploadedBy: admin.id });
+      return sendJson(res, 201, { ok: true, asset: { ...asset, url: mediaUrl(req, asset.id) } });
+    }
+
+    if (mediaMatch && req.method === 'DELETE') {
+      await requireAdmin(req);
+      await deleteMediaAsset(mediaMatch[1]);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && path === '/catalog/entries') {
+      await requireAdmin(req);
+      const entry = await createGenericCatalogEntry((await readJson(req)).entry);
+      return sendJson(res, 201, { ok: true, entry });
+    }
+
+    const genericCatalogMatch = path.match(/^\/catalog\/entries\/([^/]+)$/);
+    if (genericCatalogMatch && req.method === 'PUT') {
+      await requireAdmin(req);
+      const entry = await updateGenericCatalogEntry(
+        decodeURIComponent(genericCatalogMatch[1]),
+        (await readJson(req)).entry,
+      );
+      return sendJson(res, 200, { ok: true, entry });
+    }
+
+    if (genericCatalogMatch && req.method === 'DELETE') {
+      await requireAdmin(req);
+      await deleteCatalogEntryById(decodeURIComponent(genericCatalogMatch[1]));
+      catalogCache = null;
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && path === '/catalog/items') {
@@ -247,11 +309,24 @@ function loadDotEnv() {
   }
 }
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function setCorsHeaders(req, res) {
+  const origin = String(req.headers.origin || '').trim();
+  const allowed = new Set(String(process.env.ALLOWED_ORIGINS || 'http://localhost:3000,https://rpg-sistema-liart.vercel.app')
+    .split(',').map((value) => value.trim()).filter(Boolean));
+  let accepted = !origin || allowed.has(origin);
+  if (!process.env.VERCEL && origin) {
+    try {
+      accepted ||= ['localhost', '127.0.0.1'].includes(new URL(origin).hostname);
+    } catch {
+      accepted = false;
+    }
+  }
+  if (origin && accepted) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Cache-Control', 'no-store');
+  return accepted;
 }
 
 function sendJson(res, status, payload) {
@@ -283,7 +358,11 @@ async function readJson(req) {
     chunks.push(chunk);
   }
   if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new AppError('O corpo da requisição contém JSON inválido.', 400);
+  }
 }
 
 class AppError extends Error {
@@ -357,6 +436,44 @@ async function deleteCatalogEntry(kind, id) {
   catalogCache = null;
 }
 
+async function createGenericCatalogEntry(raw) {
+  const definition = genericCatalogDefinition(raw);
+  const entry = await insertCatalogEntry(definition.category, definition.payload);
+  catalogCache = null;
+  return entry;
+}
+
+async function updateGenericCatalogEntry(id, raw) {
+  const definition = genericCatalogDefinition(raw);
+  const entry = await updateCatalogEntryById(id, definition.category, definition.payload);
+  catalogCache = null;
+  return entry;
+}
+
+function genericCatalogDefinition(raw) {
+  const value = raw && typeof raw === 'object' ? raw : {};
+  const category = defaultCategories.find((name) => normalizeText(name) === normalizeText(value.category));
+  if (!category || category === 'Personagens') throw new AppError('Selecione uma categoria de catálogo válida.', 400);
+  const name = sanitizeText(value.name, 120);
+  if (name.length < 2) throw new AppError('O cadastro precisa ter um nome entre 2 e 120 caracteres.', 400);
+  let description = sanitizeText(value.description, 50000);
+  const metadata = value.metadata && typeof value.metadata === 'object' && !Array.isArray(value.metadata)
+    ? structuredClone(value.metadata)
+    : metadataFromDescription(description);
+  if (JSON.stringify(metadata).length > 50000) throw new AppError('Os metadados excedem o limite de 50 KB.', 413);
+  if (Object.keys(metadata).length) description = replaceMetadataBlock(description || `# ${name}`, metadata);
+  const colors = new Set(['yellow', 'purple', 'blue', 'red', 'green', 'orange', 'black', 'sky', 'pink', 'lime']);
+  const rawLabels = Array.isArray(value.labels) ? value.labels : String(value.labels || '').split(',');
+  const labels = rawLabels.slice(0, 20).map((label, index) => typeof label === 'object'
+    ? { id: labelId(label.name || `etiqueta_${index}`), name: sanitizeText(label.name, 80), color: colors.has(label.color) ? label.color : 'blue' }
+    : { id: labelId(label), name: sanitizeText(label, 80), color: 'blue' })
+    .filter((label) => label.name);
+  return {
+    category,
+    payload: { name, description, imageUrl: safeImageUrl(value.imageUrl), labels, metadata },
+  };
+}
+
 function catalogEntryDefinition(kind, raw) {
   return kind === 'spell' ? spellDefinition(raw) : itemDefinition(raw);
 }
@@ -418,7 +535,7 @@ function itemDefinition(raw) {
     name,
     listName: 'Equipamentos',
     description,
-    imageUrl: String(item.imageUrl || '').trim(),
+    imageUrl: safeImageUrl(item.imageUrl),
     labels: type === 'Armadura'
       ? [['Armadura', 'blue'], [`Armadura ${armorCategory}`, armorCategory === 'Leve' ? 'green' : armorCategory === 'Média' ? 'yellow' : armorCategory === 'Pesada' ? 'red' : 'purple']]
       : [[`Tipo: ${type}`, type === 'Arma' ? 'red' : type === 'Consumível' ? 'green' : type === 'Artefato' ? 'purple' : 'blue']],
@@ -483,7 +600,7 @@ function spellDefinition(raw) {
     name,
     listName: 'Magias',
     description,
-    imageUrl: String(spell.imageUrl || '').trim(),
+    imageUrl: safeImageUrl(spell.imageUrl),
     labels: [
       ['Magia', 'purple'],
       [`Magia: ${school}`, school === 'Divina' ? 'yellow' : school === 'Natural' ? 'green' : school === 'Demoníaca' ? 'red' : 'blue'],
@@ -505,28 +622,26 @@ async function getCharacter(id, user) {
 
 async function saveCharacter(character, user, options = {}) {
   if (!character || !character.id) throw new AppError('Personagem sem id.', 400);
-  return enqueueCharacterWrite(character.id, async () => {
-    const ownership = await getCharacterOwnershipFromDatabase(character.id);
-    if (ownership?.owner_user_id && ownership.owner_user_id !== user.id) {
-      throw new AppError('Você só pode alterar fichas criadas por você.', 403);
-    }
-    const current = ownership?.owner_user_id === user.id
-      ? await getCharacterForUserFromDatabase(character.id, user.id)
-      : null;
-    const merged = mergeCharacterUpdate(current, character, options.changedFields);
-    const currentRevision = Number(current?.syncRevision || 0);
-    const incomingRevision = Number(character.syncRevision || options.baseRevision || 0);
-    const persisted = prepareCharacterForStorage({
-      ...merged,
-      id: character.id,
-      ownerUserId: user.id,
-      visibility: normalizeVisibility(character.visibility || merged.visibility),
-      isPrivate: normalizeVisibility(character.visibility || merged.visibility) === 'private',
-      syncRevision: Math.max(currentRevision, incomingRevision) + 1,
-      updatedAt: new Date().toISOString(),
-    });
-    return saveCharacterToDatabase(persisted, options.changedFields || [], user.id);
-  });
+  const catalog = await loadCatalog();
+  const baseRevision = Number.isInteger(options.baseRevision)
+    ? options.baseRevision
+    : Number(character.syncRevision || 0);
+  return saveCharacterToDatabase(
+    character,
+    options.changedFields || [],
+    user.id,
+    {
+      baseRevision,
+      prepare: (merged) => validateAndNormalizeCharacter(prepareCharacterForStorage({
+        ...merged,
+        id: character.id,
+        ownerUserId: user.id,
+        visibility: normalizeVisibility(merged.visibility || merged.isPrivate),
+        isPrivate: normalizeVisibility(merged.visibility || merged.isPrivate) === 'private',
+        updatedAt: new Date().toISOString(),
+      }), catalog),
+    },
+  );
 }
 
 async function deleteCharacter(id, user) {
@@ -534,13 +649,12 @@ async function deleteCharacter(id, user) {
   if (!deleted) throw new AppError('Ficha não encontrada nas suas fichas.', 404);
 }
 
-function enqueueCharacterWrite(characterId, task) {
-  const previous = characterWriteQueues.get(characterId) || Promise.resolve();
-  const next = previous.catch(() => undefined).then(task);
-  characterWriteQueues.set(characterId, next);
-  return next.finally(() => {
-    if (characterWriteQueues.get(characterId) === next) characterWriteQueues.delete(characterId);
-  });
+async function limitAuthentication(req, scope, email, maximum, windowSeconds) {
+  const normalizedEmail = String(email || '').trim().toLowerCase().slice(0, 180) || 'empty';
+  await Promise.all([
+    enforceRateLimit(`${scope}:ip`, requestIp(req), { maximum: maximum * 2, windowSeconds }),
+    enforceRateLimit(`${scope}:email`, normalizedEmail, { maximum, windowSeconds }),
+  ]);
 }
 
 export function mergeCharacterUpdate(current, incoming, changedFields) {
@@ -613,4 +727,22 @@ function sanitizeText(value, maxLength = 4000) {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     .slice(0, maxLength)
     .trim();
+}
+
+function safeImageUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
+    return url.toString().slice(0, 2000);
+  } catch {
+    throw new AppError('A imagem precisa usar uma URL HTTP segura ou ser enviada pelo sistema.', 400);
+  }
+}
+
+function mediaUrl(req, id) {
+  const protocol = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'http';
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  return `${protocol}://${host}/media/${id}`;
 }

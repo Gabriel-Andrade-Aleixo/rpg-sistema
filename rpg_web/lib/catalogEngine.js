@@ -61,6 +61,7 @@ export function migrateCharacter(raw, catalog) {
     ...raw,
     attributes: { ...base.attributes, ...(raw.attributes || {}) },
     resources: { ...base.resources, ...(raw.resources || {}) },
+    combatContext: { ...base.combatContext, ...(raw.combatContext || {}) },
     currency: { ...base.currency, ...(raw.currency || {}) },
     inventory: raw.inventory || [],
     equipment: raw.equipment || [],
@@ -126,6 +127,7 @@ export function parseRace(entry, variantId = '') {
       ...metadataModifiers(entry, 'race_variant', 'skill', variant?.skillBonuses),
       ...metadataModifiers(entry, 'race_variant', 'skillRoll', variant?.skillRollBonuses),
       ...metadataModifiers(entry, 'race_variant', 'attributeRoll', variant?.attributeRollBonuses),
+      ...metadataModifiers(entry, 'race', 'skillMinimum', metadata.skillMinimums),
     ];
     return {
       entry,
@@ -135,6 +137,7 @@ export function parseRace(entry, variantId = '') {
       traits: [...(metadata.traits || []), ...(variant?.traits || [])],
       variants: metadata.variants || [],
       selectedVariant: variant,
+      metadata,
     };
   }
   const lines = linesOf(entry?.description);
@@ -143,7 +146,7 @@ export function parseRace(entry, variantId = '') {
     modifiers: parseAttributeModifiers(entry, 'race'),
     proficiencies: lines.filter((line) => normalize(line).includes('profici')),
     abilities: lines.filter((line) => normalize(line).includes('habilidad')),
-    traits: lines.filter((line) => /resist[eê]ncia|deslocamento|vis[aã]o|tamanho/i.test(line)), variants: [], selectedVariant: null,
+    traits: lines.filter((line) => /resist[eê]ncia|deslocamento|vis[aã]o|tamanho/i.test(line)), variants: [], selectedVariant: null, metadata: null,
   };
 }
 
@@ -329,7 +332,20 @@ export function recalculateCharacter(character, catalog) {
     .filter(([, value]) => Number(value) !== 0)
     .map(([targetId, value]) => ({ id: `permanent_${targetId}`, sourceId: character.id, sourceName: 'Progressão permanente', sourceType: 'experience', targetType: 'attribute', targetId, value: Number(value), operation: 'add', description: 'Bônus permanente obtido por conversão de XP.' }));
   const progressionModifiers = classProgressionModifiers(classEntry, characterClass, character.level);
-  const modifiers = [...race.modifiers, ...characterClass.modifiers, ...progressionModifiers, ...permanentModifiers, ...equipmentModifiers];
+  const conditionalRaceModifiers = (race.metadata?.conditionalRollBonuses || [])
+    .filter((rule) => conditionIsActive(rule.condition, character.combatContext))
+    .map((rule, index) => ({
+      id: `${raceEntry.id}_conditional_${index}`,
+      sourceId: raceEntry.id,
+      sourceName: raceEntry.name,
+      sourceType: 'race_condition',
+      targetType: rule.targetType || 'skillRoll',
+      targetId: normalize(rule.targetId),
+      value: Number(rule.value || 0),
+      operation: 'add',
+      description: 'Bônus racial ativo pelo contexto atual.',
+    }));
+  const modifiers = [...race.modifiers, ...conditionalRaceModifiers, ...characterClass.modifiers, ...progressionModifiers, ...permanentModifiers, ...equipmentModifiers];
   const nextResources = { ...(character.resources || {}) };
   for (const resource of characterClass.resourceFormulas || []) {
     const maximum = evaluateFormula(resource.formula, character.attributes, modifiers);
@@ -351,6 +367,12 @@ export function recalculateCharacter(character, catalog) {
     currentMana,
     resources: nextResources,
   };
+}
+
+function conditionIsActive(condition, context = {}) {
+  if (condition === 'dark_or_night') return Boolean(context.darkOrNight);
+  if (condition === 'without_sunlight') return Boolean(context.withoutSunlight);
+  return false;
 }
 
 function classProgressionModifiers(entry, characterClass, level) {
@@ -451,7 +473,9 @@ export function attributeBreakdown(character, attributeId) {
 export function skillValue(character, parsedSkill) {
   const weighted = parsedSkill.terms.reduce((sum, term) => sum + attributeBreakdown(character, term.attribute).total * term.weight, 0);
   const catalogBonus = (character.modifiers || []).filter((item) => item.targetType === 'skill' && normalize(item.targetId) === normalize(parsedSkill.entry.name)).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  return Math.floor(weighted) + catalogBonus + Number(character.skillBonuses?.[parsedSkill.entry.id] || 0);
+  const calculated = Math.floor(weighted) + catalogBonus + Number(character.skillBonuses?.[parsedSkill.entry.id] || 0);
+  const minimum = (character.modifiers || []).filter((item) => item.targetType === 'skillMinimum' && normalize(item.targetId) === normalize(parsedSkill.entry.name)).reduce((value, item) => Math.max(value, Number(item.value || 0)), 0);
+  return Math.max(calculated, minimum);
 }
 
 export function attributePointCost(currentValue) {
@@ -466,12 +490,20 @@ export function spentInitialAttributePoints(attributesMap = {}) {
 }
 
 export function defenseValue(character, classEntry = null) {
-  const classFormula = classEntry ? parseClass(classEntry).defenseFormula : null;
+  const classFormula = activeDefenseFormula(character, classEntry);
   const equipment = (character.modifiers || []).filter((item) => item.targetType === 'stat' && item.targetId === 'defense').reduce((sum, item) => sum + Number(item.value || 0), 0);
   if (classFormula) return evaluateRuleFormula(classFormula, character) + equipment;
   const dexterity = attributeBreakdown(character, 'dexterity').total;
   const constitution = attributeBreakdown(character, 'constitution').total;
   return Math.floor(dexterity * .7 + constitution * .3) + equipment;
+}
+
+export function activeDefenseFormula(character, classEntry = null) {
+  const parsedClass = classEntry ? parseClass(classEntry) : null;
+  const adaptiveFormula = character.combatContext?.enemyWithinTwoMeters
+    ? metadataFormula(parsedClass?.metadata?.conditionalDefense?.enemyWithinTwoMeters)
+    : null;
+  return adaptiveFormula || parsedClass?.defenseFormula || null;
 }
 
 export function armorClassValue(character, classEntry = null) {

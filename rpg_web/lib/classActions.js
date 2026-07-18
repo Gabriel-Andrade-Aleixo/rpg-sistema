@@ -1,4 +1,4 @@
-import { changeHumanity } from './humanity.js';
+import { changeHumanity, faithDamageBonus } from './humanity.js';
 import { demonicDamageBonus, demonicSpellCost, isDemonicSpell } from './corruption.js';
 
 export const spectralInfusions = [
@@ -74,15 +74,18 @@ export function useMagicArrow(character, spell, { successful = true, dice = null
 
 export function useSpell(character, spell, successful) {
   const demonic = isDemonicSpell(spell);
+  const divine = String(spell.type || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'divina';
   const manaCost = demonic ? demonicSpellCost(character, spell.manaCost) : Number(spell.manaCost || 0);
-  const damageBonus = demonic ? demonicDamageBonus(character) : 0;
+  const corruptionBonus = demonic ? demonicDamageBonus(character) : 0;
+  const divineBonus = divine ? faithDamageBonus(character) : 0;
   if (Number(character.currentMana || 0) < manaCost) return { character, error: 'Mana insuficiente.' };
   if (Number(character.resources?.focoCurrent || 0) < Number(spell.focusCost || 0)) return { character, error: 'Foco insuficiente.' };
   if (Number(character.resources?.humanity ?? 100) < Number(spell.humanityCost || 0)) return { character, error: 'Humanidade insuficiente.' };
   let next = { ...character, currentMana: character.currentMana - manaCost, resources: { ...character.resources, focoCurrent: Number(character.resources?.focoCurrent || 0) - Number(spell.focusCost || 0) } };
   if (spell.humanityCost) next = changeHumanity(next, -Number(spell.humanityCost), `Magia: ${spell.name}`);
   next.spells = (next.spells || []).map((item) => item.id === spell.id ? { ...item, successfulUses: Number(item.successfulUses || 0) + (successful ? 1 : 0) } : item);
-  const corruptionEffect = demonic && damageBonus ? ` · dano demoníaco +${damageBonus}` : '';
-  next.actionHistory = [actionRecord(spell.name, manaCost, Number(spell.focusCost || 0), Number(spell.humanityCost || 0), `${successful ? 'Sucesso' : 'Falha'}${corruptionEffect}`), ...(next.actionHistory || [])].slice(0, 30);
-  return { character: next, error: '' };
+  const corruptionEffect = demonic && corruptionBonus ? ` · dano demoníaco +${corruptionBonus}` : '';
+  const divineEffect = divine && divineBonus ? ` · dano divino +${divineBonus} (Fé / 2)` : '';
+  next.actionHistory = [actionRecord(spell.name, manaCost, Number(spell.focusCost || 0), Number(spell.humanityCost || 0), `${successful ? 'Sucesso' : 'Falha'}${corruptionEffect}${divineEffect}`), ...(next.actionHistory || [])].slice(0, 30);
+  return { character: next, error: '', damageBonus: corruptionBonus + divineBonus };
 }

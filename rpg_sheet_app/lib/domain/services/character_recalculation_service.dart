@@ -32,6 +32,7 @@ class CharacterRecalculationService {
     final characterClass = _parser.parseClass(classEntry);
     final modifiers = [
       ...race.modifiers,
+      ..._conditionalRaceModifiers(normalizedCharacter, race),
       ...characterClass.modifiers,
       ..._classProgressionModifiers(
         normalizedCharacter,
@@ -102,6 +103,41 @@ class CharacterRecalculationService {
       currentMana: currentMana,
       resources: resources,
     );
+  }
+
+  List<Modifier> _conditionalRaceModifiers(
+    Character character,
+    OfficialRace race,
+  ) {
+    final rules =
+        (race.mechanics['conditionalRollBonuses'] as List?) ?? const [];
+    final result = <Modifier>[];
+    for (var index = 0; index < rules.length; index++) {
+      final raw = rules[index];
+      if (raw is! Map) continue;
+      final rule = Map<String, dynamic>.from(raw);
+      final condition = rule['condition']?.toString() ?? '';
+      final active = switch (condition) {
+        'dark_or_night' => character.combatContext['darkOrNight'] == true,
+        'without_sunlight' =>
+          character.combatContext['withoutSunlight'] == true,
+        _ => false,
+      };
+      if (!active) continue;
+      result.add(
+        Modifier(
+          id: '${race.entry.id}_conditional_$index',
+          sourceId: race.entry.id,
+          sourceName: race.entry.name,
+          sourceType: 'race_condition',
+          targetType: rule['targetType']?.toString() ?? 'skillRoll',
+          targetId: normalizeCatalogText(rule['targetId']?.toString() ?? ''),
+          value: (rule['value'] as num?) ?? 0,
+          description: 'Bônus racial ativo pelo contexto atual.',
+        ),
+      );
+    }
+    return result;
   }
 
   List<Modifier> _classProgressionModifiers(

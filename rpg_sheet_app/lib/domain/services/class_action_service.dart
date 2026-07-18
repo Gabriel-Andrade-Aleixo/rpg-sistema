@@ -190,11 +190,14 @@ class ClassActionService {
     required bool successful,
   }) {
     const corruption = CorruptionService();
+    const humanity = HumanityService();
     final demonic = corruption.isDemonicSpell(spell);
+    final divine = _normalize(spell.type) == 'divina';
     final manaCost = demonic
         ? corruption.spellCost(character, spell.manaCost)
         : spell.manaCost;
     final damageBonus = demonic ? corruption.damageBonus(character) : 0;
+    final divineBonus = divine ? humanity.faithDamageBonus(character) : 0;
     if (character.currentMana < manaCost) {
       return ClassActionResult(character, error: 'Mana insuficiente.');
     }
@@ -237,7 +240,7 @@ class ClassActionService {
           focusSpent: spell.focusCost,
           humanitySpent: spell.humanityCost,
           result:
-              '${successful ? 'Sucesso' : 'Falha'}${damageBonus > 0 ? ' · dano demoníaco +$damageBonus' : ''}',
+              '${successful ? 'Sucesso' : 'Falha'}${damageBonus > 0 ? ' · dano demoníaco +$damageBonus' : ''}${divineBonus > 0 ? ' · dano divino +$divineBonus (Fé / 2)' : ''}',
           createdAt: DateTime.now(),
         ),
         ...next.actionHistory,
@@ -245,4 +248,14 @@ class ClassActionService {
     );
     return ClassActionResult(next);
   }
+
+  String _normalize(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp('[áàãâä]'), 'a')
+      .replaceAll(RegExp('[éèêë]'), 'e')
+      .replaceAll(RegExp('[íìîï]'), 'i')
+      .replaceAll(RegExp('[óòõôö]'), 'o')
+      .replaceAll(RegExp('[úùûü]'), 'u')
+      .replaceAll('ç', 'c')
+      .trim();
 }

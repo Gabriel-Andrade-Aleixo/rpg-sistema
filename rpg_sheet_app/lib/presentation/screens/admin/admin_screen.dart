@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../models/catalog_models.dart';
 import '../../../models/character.dart';
@@ -26,6 +27,7 @@ class AdminScreen extends StatefulWidget {
     required this.onLoadOwnership,
     required this.onTransferOwner,
     required this.onResetUserPassword,
+    required this.onUploadMedia,
     this.embedded = false,
   });
 
@@ -43,6 +45,8 @@ class AdminScreen extends StatefulWidget {
   onTransferOwner;
   final Future<void> Function(String userId, String password)
   onResetUserPassword;
+  final Future<String> Function(List<int> bytes, String mimeType, String alt)
+  onUploadMedia;
   final Future<void> Function() onRefresh;
   final bool embedded;
 
@@ -100,8 +104,8 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
               const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
                 child: SegmentedButton<int>(
                   segments: const [
                     ButtonSegment(
@@ -121,6 +125,11 @@ class _AdminScreenState extends State<AdminScreen> {
                     ),
                     ButtonSegment(
                       value: 3,
+                      icon: Icon(Icons.library_books_outlined),
+                      label: Text('Catálogo'),
+                    ),
+                    ButtonSegment(
+                      value: 4,
                       icon: Icon(Icons.swap_horiz_outlined),
                       label: Text('Fichas'),
                     ),
@@ -130,7 +139,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   onSelectionChanged: (value) => setState(() {
                     _tab = value.first;
                     _query = '';
-                    if (_tab == 3) {
+                    if (_tab == 4) {
                       _ownershipFuture ??= widget.onLoadOwnership();
                     }
                   }),
@@ -142,9 +151,16 @@ class _AdminScreenState extends State<AdminScreen> {
         Expanded(
           child: _tab == 0
               ? _overview(context)
-              : _tab == 3
+              : _tab == 4
               ? _ownership(context)
-              : _manager(context, _tab == 2 ? 'spell' : 'item'),
+              : _manager(
+                  context,
+                  _tab == 2
+                      ? 'spell'
+                      : _tab == 3
+                      ? 'generic'
+                      : 'item',
+                ),
         ),
       ],
     );
@@ -584,7 +600,13 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _manager(BuildContext context, String kind) {
-    final all = kind == 'spell' ? _spells : widget.catalog.items;
+    final all = kind == 'spell'
+        ? _spells
+        : kind == 'generic'
+        ? widget.catalog.entries
+              .where((entry) => entry.category != 'Personagens')
+              .toList()
+        : widget.catalog.items;
     final entries = all
         .where(
           (entry) => normalizeCatalogText(
@@ -603,6 +625,8 @@ class _AdminScreenState extends State<AdminScreen> {
                   decoration: InputDecoration(
                     hintText: kind == 'spell'
                         ? 'Buscar magias...'
+                        : kind == 'generic'
+                        ? 'Buscar no catálogo...'
                         : 'Buscar itens...',
                     prefixIcon: const Icon(Icons.search),
                   ),
@@ -611,7 +635,11 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               const SizedBox(width: 8),
               IconButton.filled(
-                tooltip: kind == 'spell' ? 'Criar magia' : 'Criar item',
+                tooltip: kind == 'spell'
+                    ? 'Criar magia'
+                    : kind == 'generic'
+                    ? 'Criar cadastro'
+                    : 'Criar item',
                 onPressed: () => _showEditor(context, kind),
                 icon: const Icon(Icons.add),
               ),
@@ -761,6 +789,12 @@ class _AdminScreenState extends State<AdminScreen> {
     final humanity = TextEditingController(text: '${costs['humanity'] ?? 0}');
     final range = TextEditingController(text: '${metadata['range'] ?? ''}');
     final damage = TextEditingController(text: '${metadata['damage'] ?? ''}');
+    final labels = TextEditingController(
+      text: entry?.labels.map((label) => label.name).join(', ') ?? '',
+    );
+    final metadataText = TextEditingController(
+      text: const JsonEncoder.withIndent('  ').convert(metadata),
+    );
     var type = metadata['armorCategory'] != null
         ? 'Armadura'
         : _itemType(entry);
@@ -768,6 +802,8 @@ class _AdminScreenState extends State<AdminScreen> {
     var bonusTarget =
         '${modifier?['targetId'] ?? (type == 'Armadura' ? 'defense' : '')}';
     var school = _school(metadata['school']);
+    var genericCategory = entry?.category ?? 'Classes';
+    var metadataError = '';
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -869,7 +905,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       ),
                       decoration: const InputDecoration(labelText: 'Peso'),
                     ),
-                  ] else ...[
+                  ] else if (kind == 'spell') ...[
                     DropdownButtonFormField<String>(
                       initialValue: school,
                       decoration: const InputDecoration(
@@ -941,6 +977,59 @@ class _AdminScreenState extends State<AdminScreen> {
                         labelText: 'Dano ou efeito',
                       ),
                     ),
+                  ] else ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: genericCategory,
+                      decoration: const InputDecoration(labelText: 'Categoria'),
+                      items:
+                          const [
+                                'Classes',
+                                'Racas',
+                                'Criaturas e Monstros',
+                                'Habilidades',
+                                'Proficiências',
+                                'Atributos',
+                                'Perícias',
+                                'Sistema',
+                                'Itens',
+                                'Equipamentos',
+                                'Magias',
+                              ]
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) => setDialogState(
+                        () => genericCategory = value ?? genericCategory,
+                      ),
+                    ),
+                    TextField(
+                      controller: labels,
+                      decoration: const InputDecoration(
+                        labelText: 'Etiquetas separadas por vírgula',
+                      ),
+                    ),
+                    TextField(
+                      controller: metadataText,
+                      minLines: 5,
+                      maxLines: 12,
+                      decoration: const InputDecoration(
+                        labelText: 'Metadados estruturados (JSON)',
+                      ),
+                    ),
+                    if (metadataError.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          metadataError,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
                   ],
                   TextField(
                     controller: description,
@@ -955,6 +1044,43 @@ class _AdminScreenState extends State<AdminScreen> {
                       labelText: 'URL da imagem',
                     ),
                     onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        try {
+                          final selected = await ImagePicker().pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 1800,
+                            imageQuality: 88,
+                            requestFullMetadata: false,
+                          );
+                          if (selected == null) return;
+                          final bytes = await selected.readAsBytes();
+                          final url = await widget.onUploadMedia(
+                            bytes,
+                            _imageMimeType(selected.name),
+                            name.text.trim(),
+                          );
+                          image.text = url;
+                          setDialogState(() {});
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Não foi possível enviar a imagem: $error',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.upload_outlined),
+                      label: const Text('Selecionar e enviar imagem'),
+                    ),
                   ),
                   if (image.text.trim().isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -984,10 +1110,26 @@ class _AdminScreenState extends State<AdminScreen> {
             FilledButton(
               onPressed: name.text.trim().length < 2
                   ? null
-                  : () => Navigator.pop(
-                      context,
-                      kind == 'item'
-                          ? {
+                  : () {
+                      var decodedMetadata = <String, dynamic>{};
+                      if (kind == 'generic') {
+                        try {
+                          final decoded = jsonDecode(metadataText.text);
+                          if (decoded is! Map) {
+                            throw const FormatException();
+                          }
+                          decodedMetadata = Map<String, dynamic>.from(decoded);
+                          metadataError = '';
+                        } catch (_) {
+                          setDialogState(
+                            () => metadataError =
+                                'Informe um objeto JSON válido nos metadados.',
+                          );
+                          return;
+                        }
+                      }
+                      final payload = kind == 'item'
+                          ? <String, dynamic>{
                               'name': name.text.trim(),
                               'type': type,
                               'armorCategory': type == 'Armadura'
@@ -1003,7 +1145,8 @@ class _AdminScreenState extends State<AdminScreen> {
                               'description': description.text.trim(),
                               'imageUrl': image.text.trim(),
                             }
-                          : {
+                          : kind == 'spell'
+                          ? <String, dynamic>{
                               'name': name.text.trim(),
                               'school': school,
                               'level': int.tryParse(level.text) ?? 0,
@@ -1018,8 +1161,21 @@ class _AdminScreenState extends State<AdminScreen> {
                               'damage': damage.text.trim(),
                               'description': description.text.trim(),
                               'imageUrl': image.text.trim(),
-                            },
-                    ),
+                            }
+                          : <String, dynamic>{
+                              'name': name.text.trim(),
+                              'category': genericCategory,
+                              'labels': labels.text
+                                  .split(',')
+                                  .map((value) => value.trim())
+                                  .where((value) => value.isNotEmpty)
+                                  .toList(),
+                              'metadata': decodedMetadata,
+                              'description': description.text.trim(),
+                              'imageUrl': image.text.trim(),
+                            };
+                      Navigator.pop(context, payload);
+                    },
               child: Text(
                 entry == null ? 'Criar cadastro' : 'Salvar alterações',
               ),
@@ -1042,6 +1198,8 @@ class _AdminScreenState extends State<AdminScreen> {
       humanity,
       range,
       damage,
+      labels,
+      metadataText,
     ]) {
       controller.dispose();
     }
@@ -1049,7 +1207,11 @@ class _AdminScreenState extends State<AdminScreen> {
     await _runAction(
       context,
       () => widget.onSaveEntry(kind, result, entry?.id),
-      '${kind == 'spell' ? 'Magia' : 'Item'} salvo na biblioteca oficial.',
+      '${kind == 'spell'
+          ? 'Magia'
+          : kind == 'generic'
+          ? 'Cadastro'
+          : 'Item'} salvo na biblioteca oficial.',
     );
   }
 
@@ -1125,6 +1287,16 @@ class _AdminScreenState extends State<AdminScreen> {
     'outra' => 'Outra',
     _ => 'Arcana',
   };
+
+  String _imageMimeType(String name) {
+    final extension = name.toLowerCase().split('.').last;
+    return switch (extension) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'gif' => 'image/gif',
+      _ => 'image/jpeg',
+    };
+  }
 
   String _mapText(Map<String, dynamic> map, String key) =>
       map[key]?.toString() ?? '';

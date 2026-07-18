@@ -149,6 +149,7 @@ class Character {
     Map<AttributeId, int>? attributes,
     Map<String, int>? skillBonuses,
     Map<String, int>? resources,
+    Map<String, bool>? combatContext,
     Currency? currency,
     List<String>? notes,
     List<InventoryItem>? inventory,
@@ -183,6 +184,7 @@ class Character {
        attributes = attributes ?? _defaultAttributes(),
        skillBonuses = skillBonuses ?? {},
        resources = {..._defaultResources(), ...?resources},
+       combatContext = {..._defaultCombatContext(), ...?combatContext},
        currency = currency ?? const Currency(),
        notes = notes ?? [],
        inventory = inventory ?? [],
@@ -220,6 +222,7 @@ class Character {
   final Map<AttributeId, int> attributes;
   final Map<String, int> skillBonuses;
   final Map<String, int> resources;
+  final Map<String, bool> combatContext;
   final Currency currency;
   final List<String> notes;
   final List<InventoryItem> inventory;
@@ -265,6 +268,15 @@ class Character {
     'dead': 0,
   };
 
+  static Map<String, bool> _defaultCombatContext() => {
+    'enemyWithinTwoMeters': false,
+    'darkOrNight': false,
+    'hotEnvironment': false,
+    'coldEnvironment': false,
+    'withoutSunlight': false,
+    'blinded': false,
+  };
+
   double get totalInventoryWeight =>
       inventory.fold(0, (sum, item) => sum + item.totalWeight);
 
@@ -285,6 +297,7 @@ class Character {
     'attributes': attributes.map((key, value) => MapEntry(key.name, value)),
     'skillBonuses': skillBonuses,
     'resources': resources,
+    'combatContext': combatContext,
     'currency': currency.toJson(),
     'notes': notes,
     'inventory': inventory.map((item) => item.toJson()).toList(),
@@ -352,6 +365,10 @@ class Character {
       },
       skillBonuses: Map<String, int>.from((json['skillBonuses'] as Map?) ?? {}),
       resources: Map<String, int>.from((json['resources'] as Map?) ?? {}),
+      combatContext: {
+        for (final entry in ((json['combatContext'] as Map?) ?? {}).entries)
+          entry.key.toString(): entry.value == true,
+      },
       currency: Currency.fromJson(
         Map<String, dynamic>.from((json['currency'] as Map?) ?? {}),
       ),
@@ -484,6 +501,7 @@ class Character {
     Map<AttributeId, int>? attributes,
     Map<String, int>? skillBonuses,
     Map<String, int>? resources,
+    Map<String, bool>? combatContext,
     Currency? currency,
     List<String>? notes,
     List<InventoryItem>? inventory,
@@ -531,6 +549,7 @@ class Character {
     attributes: attributes ?? Map.of(this.attributes),
     skillBonuses: skillBonuses ?? Map.of(this.skillBonuses),
     resources: resources ?? Map.of(this.resources),
+    combatContext: combatContext ?? Map.of(this.combatContext),
     currency: currency ?? this.currency,
     notes: notes ?? List.of(this.notes),
     inventory: inventory ?? List.of(this.inventory),

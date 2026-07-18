@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "check": "node --check server.js",
     "test": "node --test",
+    "db:migrate": "node scripts/migrate-database.js",
     "sync:system": "node scripts/sync-system-catalog.js",
     "sync:rules": "node scripts/sync-rule-metadata.js",
     "sync:document": "pwsh -NoProfile -File scripts/sync-document-rules.ps1",
@@ -20,6 +21,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "adm-zip": "0.6.0",
     "nodemailer": "^9.0.3",
     "pg": "^8.22.0"
   }

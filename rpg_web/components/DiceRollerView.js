@@ -44,7 +44,7 @@ export default function DiceRollerView({ queuedRoll, onComplete }) {
     if (window.innerWidth <= 720) {
       window.requestAnimationFrame(() => stageRef.current?.scrollIntoView({
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-        block: 'center',
+        block: 'start',
       }));
     }
   }

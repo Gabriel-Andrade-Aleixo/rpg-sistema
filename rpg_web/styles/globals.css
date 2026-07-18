@@ -186,6 +186,14 @@ textarea { resize: vertical; }
 .stepperRow, .quickActions, .combatActions, .choiceActions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .resourceAdjust { display: grid; grid-template-columns: minmax(72px, 110px) repeat(3, auto); gap: 7px; }
 .resourceAdjust input { min-width: 0; }
+.hpAdjust { display: grid; grid-template-columns: minmax(72px, .6fr) minmax(110px, 1fr) repeat(3, auto); gap: 8px; margin-top: 10px; }
+.hpAdjust input, .hpAdjust select { min-width: 0; }
+.ruleContextGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ruleContextGrid label { display: flex; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); cursor: pointer; }
+.ruleContextGrid label.active { border-color: var(--accent); background: var(--surface-3); }
+.ruleContextGrid input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+.ruleContextGrid span { display: grid; gap: 3px; min-width: 0; }
+.ruleContextGrid small { color: var(--muted); line-height: 1.35; }
 .resourceAdjust button { min-height: 38px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--ink); font-weight: 700; }
 .deathSaves { display: grid; gap: 10px; margin-top: 14px; padding: 12px; border: 1px solid var(--danger); border-radius: 7px; background: var(--surface-2); }
 .deathSaves > div:first-child { display: flex; justify-content: space-between; gap: 10px; }
@@ -317,7 +325,7 @@ textarea { resize: vertical; }
 .rollResultBlock { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--gold); border-radius: 8px; background: var(--surface-2); }
 .rollResultBlock strong { color: var(--gold); font-size: 36px; line-height: 1; }
 .rollResultBlock span, .rollResultBlock small { color: var(--muted); }
-.diceStagePanel { padding: 0; overflow: hidden; }
+.diceStagePanel { padding: 0; overflow: hidden; scroll-margin-top: 14px; }
 .diceStagePanel .diceStage { height: 440px; border: 0; background: radial-gradient(circle at 50% 12%, color-mix(in srgb, var(--primary-500) 28%, transparent), transparent 42%), var(--surface-2); }
 .diceIdle { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 440px; color: var(--muted); }
 .diceIdle svg { width: 44px; height: 44px; color: var(--gold); }
@@ -462,6 +470,10 @@ textarea { resize: vertical; }
 .catalogEditorForm { display: grid; gap: 11px; }
 .formPair, .formTriple { display: grid; gap: 9px; }
 .formPair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.uploadButton { display: flex !important; align-items: center; justify-content: center; gap: 8px; min-height: 42px; border: 1px dashed var(--line); border-radius: 7px; color: var(--gold); cursor: pointer; }
+.uploadButton input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.uploadButton svg { width: 18px; height: 18px; }
+.codeInput { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
 .formTriple { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .imagePreview { display: grid; place-items: center; overflow: hidden; aspect-ratio: 16 / 7; border: 1px dashed var(--line); border-radius: 7px; background: var(--surface-2); }
 .imagePreview > * { width: 100%; height: 100%; object-fit: cover; }
@@ -542,6 +554,9 @@ textarea { resize: vertical; }
   .spellForm .spanForm { grid-column: auto; }
   .spellResources { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .spellbookActions { grid-template-columns: 1fr; }
+  .hpAdjust { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hpAdjust button { width: 100%; }
+  .ruleContextGrid { grid-template-columns: 1fr; }
   .masterItemForm .spanForm { grid-column: auto; }
   .classXpCriteria { grid-template-columns: 1fr; }
   .coinControls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -586,6 +601,8 @@ textarea { resize: vertical; }
   .catalogSpellPicker article > button { grid-column: 2; justify-self: start; }
   .spellTopics .spellList article { grid-template-columns: 54px minmax(0, 1fr); }
   .spellImage { width: 54px; height: 54px; }
+  .spellMain > .preWrap { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+  .hpAdjust { grid-template-columns: 1fr; }
   .topicEditor { grid-template-columns: 1fr auto !important; }
   .topicEditor .ghostButton { grid-column: 1 / -1; }
   .managerEntry { grid-template-columns: 54px minmax(0, 1fr); }

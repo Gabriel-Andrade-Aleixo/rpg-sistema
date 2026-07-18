@@ -55,3 +55,12 @@ test('magia registra terceiro sucesso e desconta recursos', () => {
   assert.equal(result.character.spells[0].successfulUses, 3);
   assert.equal(result.character.resources.humanity, 97);
 });
+
+test('magia divina registra o bônus de Fé dividido por dois', () => {
+  const spell = { id: 'divine', name: 'Luz Julgadora', type: 'Divina', manaCost: 1, focusCost: 0, humanityCost: 0, successfulUses: 0 };
+  const base = emptyCharacter();
+  const character = { ...base, currentMana: 5, attributes: { ...base.attributes, faith: 7 }, resources: { ...base.resources, humanity: 40, divinity: 60 }, spells: [spell] };
+  const result = useSpell(character, spell, true);
+  assert.equal(result.damageBonus, 3);
+  assert.match(result.character.actionHistory[0].result, /Fé \/ 2/);
+});

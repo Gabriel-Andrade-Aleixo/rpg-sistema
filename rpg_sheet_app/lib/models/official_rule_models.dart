@@ -10,6 +10,7 @@ class OfficialRace {
     this.traits = const [],
     this.variants = const [],
     this.selectedVariant,
+    this.mechanics = const {},
   });
 
   final CatalogEntry entry;
@@ -19,6 +20,7 @@ class OfficialRace {
   final List<String> traits;
   final List<OfficialRaceVariant> variants;
   final OfficialRaceVariant? selectedVariant;
+  final Map<String, dynamic> mechanics;
 }
 
 class OfficialRaceVariant {
@@ -104,6 +106,7 @@ class OfficialCharacterClass {
     this.modifiers = const [],
     this.hybridDie,
     this.defenseFormula,
+    this.conditionalDefenseFormula,
     this.hpInitialFormula,
     this.hpFixedFormula,
     this.hpRollFormula,
@@ -113,6 +116,7 @@ class OfficialCharacterClass {
     this.allowedCombatXpAttributes = const [],
     this.resourceRules = const [],
     this.hasStructuredRules = false,
+    this.mechanics = const {},
   });
 
   final CatalogEntry entry;
@@ -127,6 +131,7 @@ class OfficialCharacterClass {
   final List<Modifier> modifiers;
   final int? hybridDie;
   final OfficialFormula? defenseFormula;
+  final OfficialFormula? conditionalDefenseFormula;
   final OfficialFormula? hpInitialFormula;
   final OfficialFormula? hpFixedFormula;
   final OfficialFormula? hpRollFormula;
@@ -136,6 +141,7 @@ class OfficialCharacterClass {
   final List<String> allowedCombatXpAttributes;
   final List<OfficialResourceRule> resourceRules;
   final bool hasStructuredRules;
+  final Map<String, dynamic> mechanics;
 
   List<LevelUnlock> unlocksAt(int level) =>
       unlocks.where((item) => item.level == level).toList(growable: false);

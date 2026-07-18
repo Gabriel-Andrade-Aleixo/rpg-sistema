@@ -28,6 +28,7 @@ export function emptyCharacter() {
     attributes: Object.fromEntries(attributes.map(([id]) => [id, 0])),
     skillBonuses: {},
     resources: { luck: 0, humanity: 100, divinity: 0, corruption: 0, deathSuccesses: 0, deathFailures: 0, dead: 0 },
+    combatContext: { enemyWithinTwoMeters: false, darkOrNight: false, hotEnvironment: false, coldEnvironment: false, withoutSunlight: false, blinded: false },
     currency: { gold: 0, silver: 0, copper: 0 },
     notes: [],
     inventory: [],

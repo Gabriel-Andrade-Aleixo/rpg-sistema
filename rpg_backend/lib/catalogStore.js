@@ -235,7 +235,9 @@ export async function deleteCatalogEntryById(id, allowedCategories = []) {
       [id],
     );
     const row = current.rows[0];
-    if (!row || !allowedCategories.some((item) => normalizeText(item) === normalizeText(row.category))) {
+    const categoryAllowed = !allowedCategories.length
+      || allowedCategories.some((item) => normalizeText(item) === normalizeText(row.category));
+    if (!row || !categoryAllowed) {
       const error = new Error('Entrada de catálogo não encontrada.');
       error.statusCode = 404;
       throw error;
@@ -331,16 +333,53 @@ export async function getCharacterOwnershipFromDatabase(id) {
   return result.rows[0] || null;
 }
 
-export async function saveCharacterToDatabase(character, changedFields = [], ownerUserId = null) {
+export async function saveCharacterToDatabase(character, changedFields = [], ownerUserId = null, options = {}) {
   return transaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [character.id]);
     const current = await client.query(
-      'SELECT owner_user_id FROM characters WHERE id = $1 AND deleted_at IS NULL',
+      `SELECT owner_user_id, data, sync_revision
+       FROM characters
+       WHERE id = $1
+       FOR UPDATE`,
       [character.id],
     );
-    const currentOwner = current.rows[0]?.owner_user_id || null;
+    const currentRow = current.rows[0] || null;
+    const currentOwner = currentRow?.owner_user_id || null;
+    if (currentOwner && ownerUserId && currentOwner !== ownerUserId) {
+      throw storeError('Você só pode alterar fichas criadas por você.', 403);
+    }
     const nextOwner = currentOwner || ownerUserId || null;
-    const visibility = normalizeVisibility(character.visibility);
-    const summary = characterSummary(character, nextOwner);
+    const currentRevision = Number(currentRow?.sync_revision || currentRow?.data?.syncRevision || 0);
+    const baseRevision = Number.isInteger(options.baseRevision)
+      ? options.baseRevision
+      : Number(character.syncRevision || 0);
+    const fields = normalizeChangedFields(changedFields);
+
+    if (currentRow && baseRevision > currentRevision) {
+      throw revisionConflict(currentRevision, ['syncRevision']);
+    }
+    if (currentRow && baseRevision < currentRevision) {
+      if (!fields.length) throw revisionConflict(currentRevision, ['*']);
+      const intervening = await client.query(
+        `SELECT changed_fields
+         FROM character_revisions
+         WHERE character_id = $1 AND sync_revision > $2
+         ORDER BY sync_revision`,
+        [character.id, baseRevision],
+      );
+      const changedSinceBase = new Set(intervening.rows.flatMap((row) => row.changed_fields || []));
+      const conflicts = fields.filter((field) => changedSinceBase.has(field) || changedSinceBase.has('*'));
+      if (conflicts.length) throw revisionConflict(currentRevision, conflicts);
+    }
+
+    const merged = mergeCharacterFields(currentRow?.data, character, fields);
+    const nextRevision = currentRevision + 1;
+    const prepared = options.prepare
+      ? await options.prepare(merged, { current: currentRow?.data || null, currentRevision, nextRevision })
+      : merged;
+    const persisted = { ...prepared, syncRevision: nextRevision };
+    const visibility = normalizeVisibility(persisted.visibility);
+    const summary = characterSummary(persisted, nextOwner);
     const result = await client.query(
       `INSERT INTO characters (id, owner_user_id, name, data, visibility, summary, sync_revision, updated_at, deleted_at)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, now(), NULL)
@@ -352,27 +391,57 @@ export async function saveCharacterToDatabase(character, changedFields = [], own
                      deleted_at = NULL
        RETURNING data`,
       [
-        character.id,
+        persisted.id,
         nextOwner,
-        character.name || 'Personagem sem nome',
-        JSON.stringify(character),
+        persisted.name || 'Personagem sem nome',
+        JSON.stringify(persisted),
         visibility,
         JSON.stringify(summary),
-        Number(character.syncRevision || 0),
+        nextRevision,
       ],
     );
     await client.query(
       `INSERT INTO character_revisions (character_id, sync_revision, changed_fields, data)
        VALUES ($1, $2, $3::text[], $4::jsonb)`,
       [
-        character.id,
-        Number(character.syncRevision || 0),
-        Array.isArray(changedFields) ? changedFields.slice(0, 80) : [],
-        JSON.stringify(character),
+        persisted.id,
+        nextRevision,
+        fields.length ? fields : ['*'],
+        JSON.stringify(persisted),
       ],
     );
     return result.rows[0].data;
   });
+}
+
+function normalizeChangedFields(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values
+    .map((value) => String(value || '').trim())
+    .filter((value) => value && !['id', 'syncRevision', 'createdAt', 'ownerUserId'].includes(value))
+    .slice(0, 80))];
+}
+
+function mergeCharacterFields(current, incoming, changedFields) {
+  if (!current) return { ...incoming };
+  if (!changedFields.length) return { ...current, ...incoming };
+  const merged = { ...current };
+  for (const field of changedFields) {
+    if (Object.hasOwn(incoming, field)) merged[field] = incoming[field];
+  }
+  return merged;
+}
+
+function revisionConflict(currentRevision, conflictFields) {
+  const error = storeError('A ficha foi alterada em outro dispositivo. Recarregue antes de editar os mesmos campos.', 409);
+  error.details = { code: 'REVISION_CONFLICT', currentRevision, conflictFields };
+  return error;
+}
+
+function storeError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
 }
 
 export async function transferCharacterOwnershipInDatabase(id, nextOwnerUserId) {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Copy, Crown, Dices, LogOut, Moon, Pencil, Plus, Shield, Sun, Trash2, UserRound } from 'lucide-react';
-import { clearSession, createCatalogItem, createCatalogSpell, deleteCatalogEntry, deleteCharacter, listAdminCharacters, listAdminUsers, listCharacters, loadCatalog, loadStoredSession, login, logout, register, resetAdminUserPassword, resetPassword, saveCharacter, transferCharacterOwner, updateCatalogEntry } from '../lib/api';
+import { clearSession, createCatalogItem, createCatalogSpell, createGenericCatalogEntry, deleteCatalogEntry, deleteCharacter, deleteGenericCatalogEntry, listAdminCharacters, listAdminUsers, listCharacters, loadCatalog, loadStoredSession, login, logout, register, resetAdminUserPassword, resetPassword, saveCharacter, transferCharacterOwner, updateCatalogEntry, updateGenericCatalogEntry, uploadMedia } from '../lib/api';
 import { emptyCharacter } from '../lib/rpgData';
 import { findEntry, migrateCharacter } from '../lib/catalogEngine';
 import { changedCharacterFields, compactCharacter } from '../lib/characterSync';
@@ -217,7 +217,9 @@ export default function Home() {
     setSaving(true);
     setError('');
     try {
-      if (id) await updateCatalogEntry(kind, id, entry);
+      if (kind === 'generic' && id) await updateGenericCatalogEntry(id, entry);
+      else if (kind === 'generic') await createGenericCatalogEntry(entry);
+      else if (id) await updateCatalogEntry(kind, id, entry);
       else if (kind === 'spell') await createCatalogSpell(entry);
       else await createCatalogItem(entry);
       await load(true, selectedId);
@@ -233,7 +235,8 @@ export default function Home() {
     setSaving(true);
     setError('');
     try {
-      await deleteCatalogEntry(kind, id);
+      if (kind === 'generic') await deleteGenericCatalogEntry(id);
+      else await deleteCatalogEntry(kind, id);
       await load(true, selectedId);
     } catch (reason) {
       setError(reason.message);
@@ -297,7 +300,7 @@ export default function Home() {
         {loading && <LoadingOverlay label="Sincronizando fichas e catálogo..." />}
         {saving && <div className="savingBar">Salvando ficha...</div>}
         {view === 'catalog' && <CatalogView catalog={catalog} />}
-        {view === 'admin' && session.user?.role === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} onLoadAdminDirectory={loadAdminDirectory} onTransferCharacterOwner={transferMasterCharacter} onResetUserPassword={resetMasterUserPassword} />}
+        {view === 'admin' && session.user?.role === 'admin' && <AdminView catalog={catalog} characters={characters} onRefresh={() => load(true)} onSaveCatalogEntry={saveMasterEntry} onDeleteCatalogEntry={removeMasterEntry} onUploadMedia={uploadMedia} onLoadAdminDirectory={loadAdminDirectory} onTransferCharacterOwner={transferMasterCharacter} onResetUserPassword={resetMasterUserPassword} />}
         {view === 'dice' && <DiceRollerView queuedRoll={diceRequest} onComplete={completeQueuedRoll} />}
         {view === 'wizard' && draft && <CharacterWizard initial={draft} catalog={catalog} onSave={persistDraft} onCancel={() => { setDraft(null); setView('sheet'); }} requestRoll={requestRoll} />}
         {view === 'sheet' && selected && <CharacterSheet character={selected} catalog={catalog} onEdit={beginEdit} onUpdate={updateCharacter} requestRoll={requestRoll} />}

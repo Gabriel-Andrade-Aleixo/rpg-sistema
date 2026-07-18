@@ -19,7 +19,7 @@ import {
 } from '../lib/catalogEngine.js';
 import { emptyCharacter } from '../lib/rpgData.js';
 import { calculateClassSessionXp } from '../lib/experience.js';
-import { changeHumanity, divineAccuracyBonus, humanityResistanceBonus, humanityStatus } from '../lib/humanity.js';
+import { changeHumanity, divineAccuracyBonus, faithDamageBonus, humanityResistanceBonus, humanityStatus } from '../lib/humanity.js';
 
 const attributes = {
   strength: 2,
@@ -270,4 +270,38 @@ test('CD divina respeita faixa inicial e regra específica da classe', () => {
   assert.equal(humanityStatus(atEighty, { name: 'Arqueiro Espectral' }).difficulty, 17);
   assert.equal(humanityStatus(atEighty, { name: 'Clérigo' }).difficulty, 15);
   assert.equal(humanityStatus(atEighty, { name: 'Paladino' }).difficulty, 15);
+});
+
+test('dano divino usa metade da Fé efetiva', () => {
+  const base = emptyCharacter();
+  const character = {
+    ...base,
+    attributes: { ...base.attributes, faith: 7 },
+    modifiers: [{ targetType: 'attribute', targetId: 'faith', value: 2 }],
+    resources: { ...base.resources, humanity: 45, divinity: 55 },
+  };
+  assert.equal(faithDamageBonus(character), 4);
+});
+
+test('Ranger alterna a Defesa Adaptativa apenas com inimigo próximo', () => {
+  const rangerRule = classRules.find((item) => item.id === 'ranger');
+  const ranger = entryFor(rangerRule);
+  const metadata = JSON.parse(ranger.description.match(/RPG_RULES_JSON_START -->\n(.+)\n<!--/s)[1]);
+  metadata.conditionalDefense = { enemyWithinTwoMeters: formula(0, { dexterity: .6, constitution: .3, intelligence: .1 }) };
+  ranger.description = `<!-- RPG_RULES_JSON_START -->\n${JSON.stringify(metadata)}\n<!-- RPG_RULES_JSON_END -->`;
+  const character = { ...emptyCharacter(), attributes: { ...emptyCharacter().attributes, dexterity: 8, constitution: 2, intelligence: 1 }, modifiers: [] };
+  assert.equal(defenseValue(character, ranger), 3);
+  assert.equal(defenseValue({ ...character, combatContext: { ...character.combatContext, enemyWithinTwoMeters: true } }, ranger), 5);
+});
+
+test('Genasi respeita Religião mínima e Bugbear ativa Furtividade no escuro', () => {
+  const neutralClass = entryFor(classRules[0]);
+  const religion = { id: 'religion', name: 'Religião', description: 'Fé 100%.' };
+  const genasi = { id: 'genasi', name: 'Genasi', category: 'Racas', description: '<!-- RPG_RULES_JSON_START -->\n{"type":"race","skillMinimums":{"religiao":6}}\n<!-- RPG_RULES_JSON_END -->' };
+  const genasiCharacter = recalculateCharacter({ ...emptyCharacter(), raceId: genasi.id, classId: neutralClass.id }, { entries: [genasi, neutralClass] });
+  assert.equal(skillValue(genasiCharacter, parseSkill(religion)), 6);
+
+  const bugbear = { id: 'bugbear', name: 'Bugbear', category: 'Racas', description: '<!-- RPG_RULES_JSON_START -->\n{"type":"race","conditionalRollBonuses":[{"targetType":"skillRoll","targetId":"furtividade","value":1,"condition":"dark_or_night"}]}\n<!-- RPG_RULES_JSON_END -->' };
+  const dark = recalculateCharacter({ ...emptyCharacter(), raceId: bugbear.id, classId: neutralClass.id, combatContext: { ...emptyCharacter().combatContext, darkOrNight: true } }, { entries: [bugbear, neutralClass] });
+  assert.equal(dark.modifiers.find((item) => item.sourceType === 'race_condition')?.value, 1);
 });
