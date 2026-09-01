@@ -429,6 +429,90 @@ class CharacterSpell {
       );
 }
 
+class CombatTechnique {
+  const CombatTechnique({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    this.description = '',
+    this.damage = '',
+    this.training = '',
+    this.costType = 'none',
+    this.cooldownTurns = 0,
+    this.cooldownRemaining = 0,
+    this.usedThisCombat = false,
+  });
+
+  final String id;
+  final String name;
+  final String description;
+  final String damage;
+  final String training;
+  final String costType;
+  final int cooldownTurns;
+  final int cooldownRemaining;
+  final bool usedThisCombat;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'damage': damage,
+    'training': training,
+    'costType': costType,
+    'cooldownTurns': cooldownTurns,
+    'cooldownRemaining': cooldownRemaining,
+    'usedThisCombat': usedThisCombat,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory CombatTechnique.fromJson(Map<String, dynamic> json) =>
+      CombatTechnique(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        description: json['description']?.toString() ?? '',
+        damage: json['damage']?.toString() ?? '',
+        training: json['training']?.toString() ?? '',
+        costType:
+            const [
+              'none',
+              'once_per_combat',
+              'cooldown',
+            ].contains(json['costType']?.toString())
+            ? json['costType'].toString()
+            : 'none',
+        cooldownTurns: (json['cooldownTurns'] as num?)?.toInt() ?? 0,
+        cooldownRemaining: (json['cooldownRemaining'] as num?)?.toInt() ?? 0,
+        usedThisCombat: json['usedThisCombat'] == true,
+        createdAt:
+            DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+            DateTime.now(),
+      );
+
+  CombatTechnique copyWith({
+    String? name,
+    String? description,
+    String? damage,
+    String? training,
+    String? costType,
+    int? cooldownTurns,
+    int? cooldownRemaining,
+    bool? usedThisCombat,
+  }) => CombatTechnique(
+    id: id,
+    name: name ?? this.name,
+    description: description ?? this.description,
+    damage: damage ?? this.damage,
+    training: training ?? this.training,
+    costType: costType ?? this.costType,
+    cooldownTurns: cooldownTurns ?? this.cooldownTurns,
+    cooldownRemaining: cooldownRemaining ?? this.cooldownRemaining,
+    usedThisCombat: usedThisCombat ?? this.usedThisCombat,
+    createdAt: createdAt,
+  );
+}
+
 class ActionUseRecord {
   const ActionUseRecord({
     required this.id,

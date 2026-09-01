@@ -39,6 +39,7 @@ import { calculateClassSessionXp, classXpCriteria } from '../lib/experience';
 import { changeHitPoints, recordDeathSave, resetDeathSaves } from '../lib/deathSaves';
 import { infusionDamage, infusionManaCost, spectralInfusions, spectralSpellPresets, useInfusion, useMagicArrow, useSpell } from '../lib/classActions';
 import { advanceDemonicTurn, changeCorruption, corruptionStatus, corruptionValue, demonicDamageBonus, demonicIncomingDamageBonus, demonicSpellCost, isDemonicSpell, toggleDemonicZone } from '../lib/corruption';
+import { advanceTechniqueTurn, canLearnCombatTechniques, saveCombatTechnique, setTechniqueCombatState, techniqueCostOptions, useCombatTechnique } from '../lib/combatTechniques';
 
 export default function CharacterSheet({ character, catalog, onEdit, onUpdate, requestRoll }) {
   const [levelUp, setLevelUp] = useState(false);
@@ -144,6 +145,8 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
 
       {normalize(classEntry?.name || '') === 'arqueiro espectral' && <ClassActionsPanel character={character} classEntry={classEntry} onChange={persistCharacter} />}
 
+      <CombatTechniquesPanel character={character} parsedClass={parsedClass} onChange={persistCharacter} />
+
       <RuleContextPanel character={character} raceEntry={race} classEntry={classEntry} onChange={persistCharacter} />
 
       <Panel title="Atributos" subtitle="Clique no dado para testar" wide>
@@ -195,6 +198,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       {activeTab === 'description' && <>
       <Panel title="Personagem" subtitle={character.background || 'Antecedente não informado'} wide><p className="preWrap">{character.lore || 'Sem história cadastrada.'}</p></Panel>
       <Panel title={race?.name || 'Raça'} subtitle="Descrição da raça" wide><p className="preWrap">{race ? displayDescription(race) || 'Sem descrição cadastrada.' : 'Raça indisponível no catálogo.'}</p></Panel>
+      {character.raceConnection && <Panel title="Conexão élfica" subtitle={character.combatContext?.separatedFromConnection ? 'Separado da conexão' : 'Conexão presente'} wide><p className="preWrap"><strong>Vínculo:</strong> {character.raceConnection}{'\n\n'}<strong>Penalidade ao se separar:</strong> {character.raceConnectionPenalty || 'Definida pelo Mestre conforme a força da conexão.'}</p></Panel>}
       <Panel title={classEntry?.name || 'Classe'} subtitle="Descrição completa da classe" wide><p className="preWrap">{classEntry ? displayDescription(classEntry) || 'Sem descrição cadastrada.' : 'Classe indisponível no catálogo.'}</p></Panel>
       <Panel title="Anotações"><p className="preWrap">{character.notes?.join('\n') || 'Sem anotações.'}</p></Panel>
       </>}
@@ -273,6 +277,7 @@ function RuleContextPanel({ character, raceEntry, classEntry, onChange }) {
     mechanics.environmentEffects?.some((rule) => rule.environment === 'gelo') && ['coldEnvironment', 'Ambiente gelado', 'Aplica efeitos raciais de região gelada.'],
     mechanics.conditionalCosts?.some((rule) => rule.condition === 'without_sunlight') && ['withoutSunlight', 'Sem luz solar', 'O Mestre define o custo adicional de Humanidade.'],
     mechanics.statusEffects?.some((rule) => rule.status === 'blinded') && ['blinded', 'Cegueira', 'Lembrete: sofre o dano por turno descrito na raça.'],
+    mechanics.connection?.required && ['separatedFromConnection', 'Separado da conexão', 'Ativa o lembrete da penalidade élfica definida pelo Mestre.'],
   ].filter(Boolean);
   if (!options.length) return null;
   const activeEffects = [
@@ -280,6 +285,7 @@ function RuleContextPanel({ character, raceEntry, classEntry, onChange }) {
     character.combatContext?.coldEnvironment && mechanics.environmentEffects?.some((rule) => rule.environment === 'gelo') && 'Deslocamento: -2 m em ambiente gelado.',
     character.combatContext?.withoutSunlight && mechanics.conditionalCosts?.length && 'Humanidade: custo adicional definido pelo Mestre enquanto estiver sem luz solar.',
     character.combatContext?.blinded && mechanics.statusEffects?.find((rule) => rule.status === 'blinded')?.damagePerTurn && `Cegueira: ${mechanics.statusEffects.find((rule) => rule.status === 'blinded').damagePerTurn} de dano físico por turno.`,
+    character.combatContext?.separatedFromConnection && mechanics.connection?.required && `Conexão élfica: ${character.raceConnectionPenalty || 'penalidade definida pelo Mestre conforme a força do vínculo'}.`,
   ].filter(Boolean);
 
   function toggle(id) {
@@ -287,6 +293,81 @@ function RuleContextPanel({ character, raceEntry, classEntry, onChange }) {
   }
 
   return <Panel title="Contexto de regras" subtitle="Condições que alteram a ficha" wide><div className="ruleContextGrid">{options.map(([id, label, description]) => <label key={id} className={character.combatContext?.[id] ? 'active' : ''}><input type="checkbox" checked={Boolean(character.combatContext?.[id])} onChange={() => toggle(id)} /><span><strong>{label}</strong><small>{description}</small></span></label>)}</div>{activeEffects.length > 0 && <div className="modifierSummary">{activeEffects.map((effect) => <span key={effect}>{effect}</span>)}</div>}</Panel>;
+}
+
+function CombatTechniquesPanel({ character, parsedClass, onChange }) {
+  const emptyForm = { name: '', damage: '', description: '', training: '', costType: 'none', cooldownTurns: 1 };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState('');
+  const eligible = canLearnCombatTechniques(parsedClass);
+  const inCombat = character.combatContext?.inCombat === true;
+
+  function submit(event) {
+    event.preventDefault();
+    const result = saveCombatTechnique(character, form, editingId);
+    setError(result.error);
+    if (result.error) return;
+    onChange(result.character);
+    setForm(emptyForm);
+    setEditingId('');
+    setShowForm(false);
+  }
+
+  function edit(technique) {
+    setForm({
+      name: technique.name,
+      damage: technique.damage || '',
+      description: technique.description || '',
+      training: technique.training || '',
+      costType: technique.costType || 'none',
+      cooldownTurns: technique.cooldownTurns || 1,
+    });
+    setEditingId(technique.id);
+    setShowForm(true);
+    setError('');
+  }
+
+  function use(technique) {
+    const result = useCombatTechnique(character, technique.id);
+    setError(result.error);
+    if (!result.error) onChange(result.character);
+  }
+
+  function setCombat(active) {
+    setError('');
+    setShowForm(false);
+    setEditingId('');
+    onChange(setTechniqueCombatState(character, active));
+  }
+
+  if (!eligible) return <Panel title="Técnicas de combate" subtitle="Treinamento marcial" wide><p className="muted">A regra permite técnicas para classes que lutam sem Mana ou que utilizam armas. Esta classe não atende aos critérios estruturados atuais.</p></Panel>;
+
+  return <Panel title="Técnicas de combate" subtitle="Golpes treinados fora de combate" wide>
+    {error && <p className="validationError">{error}</p>}
+    <div className="techniqueToolbar">
+      <span className={inCombat ? 'combatStatus active' : 'combatStatus'}>{inCombat ? 'Combate ativo' : 'Fora de combate'}</span>
+      {!inCombat && <button className="primaryButton compactButton" onClick={() => setCombat(true)}>Iniciar combate</button>}
+      {inCombat && <><button onClick={() => onChange(advanceTechniqueTurn(character))}>Avançar turno</button><button className="ghostButton" onClick={() => setCombat(false)}>Encerrar combate</button></>}
+      {!inCombat && <button className="ghostButton" onClick={() => { setShowForm(!showForm); setEditingId(''); setForm(emptyForm); setError(''); }}><Plus aria-hidden="true" />{showForm ? 'Cancelar' : 'Treinar técnica'}</button>}
+    </div>
+    <p className="muted">Técnicas são criadas por treinamento fora de combate. Golpes especiais podem ter uso único por combate ou recarga em turnos.</p>
+    {showForm && !inCombat && <form className="techniqueForm" onSubmit={submit}>
+      <label>Nome<input required maxLength="120" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+      <label>Dano ou sequência<input maxLength="200" value={form.damage} onChange={(event) => setForm({ ...form, damage: event.target.value })} placeholder="Ex.: duas machadadas" /></label>
+      <label>Limite de uso<select value={form.costType} onChange={(event) => setForm({ ...form, costType: event.target.value })}>{techniqueCostOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+      {form.costType === 'cooldown' && <label>Recarga<input type="number" min="1" max="99" value={form.cooldownTurns} onChange={(event) => setForm({ ...form, cooldownTurns: event.target.value })} /></label>}
+      <label className="spanForm">Treinamento<textarea rows="2" maxLength="500" value={form.training} onChange={(event) => setForm({ ...form, training: event.target.value })} placeholder="Como a técnica foi praticada e aprendida" /></label>
+      <label className="spanForm">Descrição<textarea rows="3" maxLength="1200" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+      <button className="primaryButton" type="submit">{editingId ? 'Salvar técnica' : 'Aprender técnica'}</button>
+    </form>}
+    {!(character.techniques || []).length ? <p className="muted">Nenhuma técnica aprendida.</p> : <div className="techniqueGrid">{character.techniques.map((technique) => {
+      const blocked = technique.usedThisCombat || Number(technique.cooldownRemaining || 0) > 0;
+      const limit = technique.costType === 'once_per_combat' ? 'Uso único por combate' : technique.costType === 'cooldown' ? `Recarga: ${technique.cooldownTurns} turno(s)` : 'Sem limite especial';
+      return <article key={technique.id}><div><strong>{technique.name}</strong><span>{limit}</span></div>{technique.damage && <p><b>Dano/efeito:</b> {technique.damage}</p>}{technique.description && <p>{technique.description}</p>}{technique.training && <small>Treinamento: {technique.training}</small>}{inCombat && blocked && <small>{technique.usedThisCombat ? 'Já utilizada neste combate.' : `Disponível em ${technique.cooldownRemaining} turno(s).`}</small>}<div className="quickActions"><button className="primaryButton compactButton" disabled={!inCombat || blocked} onClick={() => use(technique)}>Usar</button>{!inCombat && <><button onClick={() => edit(technique)}>Editar</button><button className="removeButton" onClick={() => onChange({ ...character, techniques: character.techniques.filter((item) => item.id !== technique.id) })}>Remover</button></>}</div></article>;
+    })}</div>}
+  </Panel>;
 }
 
 function ResourceControl({ label, current, max, onChange, readOnly = false }) {

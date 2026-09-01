@@ -76,6 +76,16 @@ export function migrateCharacter(raw, catalog) {
       damage: spell.damage || '',
       imageUrl: spell.imageUrl || '',
     })),
+    techniques: (raw.techniques || []).map((technique) => ({
+      ...technique,
+      description: technique.description || '',
+      damage: technique.damage || '',
+      training: technique.training || '',
+      costType: ['none', 'once_per_combat', 'cooldown'].includes(technique.costType) ? technique.costType : 'none',
+      cooldownTurns: Number(technique.cooldownTurns || 0),
+      cooldownRemaining: Number(technique.cooldownRemaining || 0),
+      usedThisCombat: technique.usedThisCombat === true,
+    })),
     manualProficiencies: raw.manualProficiencies || [],
     manualAbilities: raw.manualAbilities || [],
     permanentAttributeBonuses: raw.permanentAttributeBonuses || {},
@@ -175,6 +185,7 @@ export function parseClass(entry) {
       defenseFormula: metadataFormula(metadata.defense),
       attributeProgression: metadata.attributeProgression || [],
       allowedCombatXpAttributes: metadata.allowedCombatXpAttributes || [],
+      usesWeapons: metadata.usesWeapons === true,
       metadata,
     };
   }
@@ -209,6 +220,7 @@ export function parseClass(entry) {
     }),
     unlocks: parseUnlocks(lines),
     modifiers: parseExplicitClassModifiers(entry), defenseFormula: null, attributeProgression: [], allowedCombatXpAttributes: [], metadata: null,
+    usesWeapons: false,
   };
 }
 
@@ -345,7 +357,22 @@ export function recalculateCharacter(character, catalog) {
       operation: 'add',
       description: 'Bônus racial ativo pelo contexto atual.',
     }));
-  const modifiers = [...race.modifiers, ...conditionalRaceModifiers, ...characterClass.modifiers, ...progressionModifiers, ...permanentModifiers, ...equipmentModifiers];
+  const racialChoice = race.metadata?.attributeChoice;
+  const racialChoiceModifiers = racialChoice
+    && (racialChoice.allowed || []).includes(character.raceAttributeChoice)
+    ? [{
+      id: `${raceEntry.id}_choice_${character.raceAttributeChoice}`,
+      sourceId: raceEntry.id,
+      sourceName: `${raceEntry.name} · Versatilidade`,
+      sourceType: 'race_choice',
+      targetType: 'attribute',
+      targetId: character.raceAttributeChoice,
+      value: Number(racialChoice.amount || 0),
+      operation: 'add',
+      description: 'Atributo escolhido na criação pela versatilidade racial.',
+    }]
+    : [];
+  const modifiers = [...race.modifiers, ...racialChoiceModifiers, ...conditionalRaceModifiers, ...characterClass.modifiers, ...progressionModifiers, ...permanentModifiers, ...equipmentModifiers];
   const nextResources = { ...(character.resources || {}) };
   for (const resource of characterClass.resourceFormulas || []) {
     const maximum = evaluateFormula(resource.formula, character.attributes, modifiers);
@@ -538,6 +565,9 @@ export function validateCharacter(character, catalog) {
     else {
       const race = parseRace(raceEntry, character.raceVariant);
       if (race.variants.length && !race.selectedVariant) errors.push('Selecione uma variante válida da raça.');
+      const choice = race.metadata?.attributeChoice;
+      if (choice && !(choice.allowed || []).includes(character.raceAttributeChoice)) errors.push('Escolha o atributo versátil concedido pela raça Elfo.');
+      if (race.metadata?.connection?.required && !character.raceConnection?.trim()) errors.push('Descreva a conexão racial do Elfo.');
     }
   }
   if (Object.values(character.attributes || {}).some((value) => Number(value) < 0)) errors.push('Atributos não podem ser negativos.');

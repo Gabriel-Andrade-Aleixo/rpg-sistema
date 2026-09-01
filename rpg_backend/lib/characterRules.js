@@ -35,6 +35,16 @@ export function validateAndNormalizeCharacter(raw, catalog) {
   );
   const variant = (raceRules.variants || []).find((item) => item.id === character.raceVariant) || null;
   if ((raceRules.variants || []).length && !variant) errors.push('Selecione uma variante válida para a raça.');
+  character.raceAttributeChoice = normalizeRaceAttributeChoice(
+    character.raceAttributeChoice,
+    raceRules.attributeChoice,
+    errors,
+  );
+  character.raceConnection = boundedText(character.raceConnection, 300);
+  character.raceConnectionPenalty = boundedText(character.raceConnectionPenalty, 500);
+  if (raceRules.connection?.required && !character.raceConnection) {
+    errors.push('Descreva a conexão racial do Elfo.');
+  }
 
   const catalogById = new Map(entries.map((entry) => [entry.id, entry]));
   character.inventory = validateInventory(character.inventory, catalogById, 'inventário', errors);
@@ -60,8 +70,9 @@ export function validateAndNormalizeCharacter(raw, catalog) {
   else character.maxMana = boundedInteger(character.maxMana, 0, 100000, 'Mana máxima', errors);
   character.currentMana = boundedInteger(character.currentMana, 0, character.maxMana, 'Mana atual', errors);
 
-  character.resources = normalizeResources(character.resources, classRules, character.attributes, attributeBonuses, errors);
   character.combatContext = normalizeCombatContext(character.combatContext);
+  character.resources = normalizeResources(character.resources, classRules, character.attributes, attributeBonuses, errors);
+  character.techniques = validateCombatTechniques(character.techniques, classRules, character.combatContext, errors);
   character.currency = normalizeCurrency(character.currency, errors);
   character.classXp = boundedInteger(character.classXp, 0, 1000000, 'XP de Classe', errors);
   character.classXpTotal = boundedInteger(character.classXpTotal, 0, 1000000, 'XP total de Classe', errors);
@@ -120,6 +131,9 @@ function collectAttributeBonuses(character, race, variant, characterClass, catal
   const result = Object.fromEntries(attributeIds.map((id) => [id, 0]));
   addAttributes(result, race.attributeBonuses);
   addAttributes(result, variant?.attributeBonuses);
+  if (character.raceAttributeChoice && race.attributeChoice) {
+    result[character.raceAttributeChoice] += Number(race.attributeChoice.amount || 0);
+  }
   addAttributes(result, character.permanentAttributeBonuses);
   for (const range of characterClass.attributeProgression || []) {
     const levels = Math.max(0, Math.min(character.level, Number(range.to || 0)) - Number(range.from || 1) + 1);
@@ -211,9 +225,69 @@ function normalizeResources(raw, classRules, attributes, bonuses, errors) {
 function normalizeCombatContext(raw) {
   const allowed = [
     'enemyWithinTwoMeters', 'darkOrNight', 'hotEnvironment',
-    'coldEnvironment', 'withoutSunlight', 'blinded',
+    'coldEnvironment', 'withoutSunlight', 'blinded', 'inCombat',
+    'separatedFromConnection',
   ];
   return Object.fromEntries(allowed.map((name) => [name, raw?.[name] === true]));
+}
+
+function normalizeRaceAttributeChoice(raw, rule, errors) {
+  if (!rule) return '';
+  const choice = String(raw || '').trim();
+  const allowed = Array.isArray(rule.allowed)
+    ? rule.allowed.filter((id) => attributeIds.includes(id))
+    : attributeIds;
+  if (!allowed.includes(choice)) {
+    errors.push('Escolha o atributo versátil concedido pela raça Elfo.');
+    return '';
+  }
+  return choice;
+}
+
+function validateCombatTechniques(values, classRules, combatContext, errors) {
+  if (!Array.isArray(values)) return [];
+  const eligible = !classRules.mana || classRules.usesWeapons === true;
+  if (values.length && !eligible) {
+    errors.push('A classe precisa lutar sem Mana ou usar armas para aprender técnicas de combate.');
+    return [];
+  }
+  const ids = new Set();
+  const techniques = values.slice(0, 100).map((raw, index) => {
+    const id = String(raw?.id || '').trim();
+    const name = boundedText(raw?.name, 120);
+    if (!/^technique_[a-z0-9_-]{3,120}$/i.test(id) || ids.has(id)) {
+      errors.push(`A técnica ${index + 1} possui identificador inválido ou repetido.`);
+    }
+    ids.add(id);
+    if (!name) errors.push(`Informe o nome da técnica ${index + 1}.`);
+    const costType = ['none', 'once_per_combat', 'cooldown'].includes(raw?.costType)
+      ? raw.costType
+      : 'none';
+    const cooldownTurns = costType === 'cooldown'
+      ? boundedInteger(raw?.cooldownTurns, 1, 99, `Recarga de ${name || 'técnica'}`, errors)
+      : 0;
+    return {
+      id,
+      name,
+      description: boundedText(raw?.description, 1200),
+      damage: boundedText(raw?.damage, 200),
+      training: boundedText(raw?.training, 500),
+      costType,
+      cooldownTurns,
+      cooldownRemaining: combatContext.inCombat && costType === 'cooldown'
+        ? boundedInteger(raw?.cooldownRemaining, 0, cooldownTurns, `Recarga restante de ${name || 'técnica'}`, errors)
+        : 0,
+      usedThisCombat: combatContext.inCombat && costType === 'once_per_combat'
+        ? raw?.usedThisCombat === true
+        : false,
+      createdAt: String(raw?.createdAt || new Date().toISOString()).slice(0, 40),
+    };
+  });
+  return techniques;
+}
+
+function boundedText(value, maximum) {
+  return String(value || '').trim().slice(0, maximum);
 }
 
 function normalizeCurrency(raw, errors) {
@@ -275,6 +349,11 @@ function calculateDerivedStats(character, race, variant, characterClass, catalog
     blindedDamagePerTurn: character.combatContext.blinded
       ? (race.statusEffects || []).find((rule) => rule.status === 'blinded')?.damagePerTurn || ''
       : '',
+    separatedFromConnection: Boolean(
+      race.connection?.required && character.combatContext.separatedFromConnection,
+    ),
+    connectionPenaltyMasterDefined: Boolean(race.connection?.penaltyMasterDefined),
+    canLearnCombatTechniques: !characterClass.mana || characterClass.usesWeapons === true,
   };
 }
 

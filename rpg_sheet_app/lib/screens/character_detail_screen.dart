@@ -8,6 +8,7 @@ import '../domain/calculators/skill_calculator.dart';
 import '../domain/services/character_export_service.dart';
 import '../domain/services/class_action_service.dart';
 import '../domain/services/character_recalculation_service.dart';
+import '../domain/services/combat_technique_service.dart';
 import '../domain/services/death_save_service.dart';
 import '../domain/services/experience_service.dart';
 import '../domain/services/humanity_service.dart';
@@ -54,6 +55,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
   static const _corruption = CorruptionService();
   static const _deathSaves = DeathSaveService();
   static const _classActions = ClassActionService();
+  static const _techniques = CombatTechniqueService();
   static const _parser = TrelloParserService();
   static const _export = CharacterExportService();
   final _recalculation = CharacterRecalculationService();
@@ -153,6 +155,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       1 => <Widget>[
         if (normalizeCatalogText(_class?.name ?? '') == 'arqueiro espectral')
           SectionCard(title: 'Flecha Mágica', child: _infusionSection()),
+        SectionCard(title: 'Técnicas de combate', child: _techniqueSection()),
         if (_hasRuleContext)
           SectionCard(
             title: 'Contexto de regras',
@@ -225,6 +228,17 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                 : 'Descrição da raça indisponível.',
           ),
         ),
+        if (_character.raceConnection.isNotEmpty)
+          SectionCard(
+            title: 'Conexão élfica',
+            child: Text(
+              [
+                'Vínculo: ${_character.raceConnection}',
+                'Estado: ${_character.combatContext['separatedFromConnection'] == true ? 'separado da conexão' : 'conexão presente'}',
+                'Penalidade ao se separar: ${_character.raceConnectionPenalty.isEmpty ? 'definida pelo Mestre conforme a força da conexão' : _character.raceConnectionPenalty}',
+              ].join('\n\n'),
+            ),
+          ),
         SectionCard(
           title: _class?.name ?? 'Classe',
           child: Text(
@@ -512,6 +526,287 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
+  Widget _techniqueSection() {
+    final characterClass = _class == null ? null : _parser.parseClass(_class!);
+    if (!_techniques.canLearn(characterClass)) {
+      return const Text(
+        'A regra permite técnicas para classes que lutam sem Mana ou utilizam armas. Esta classe não atende aos critérios estruturados atuais.',
+      );
+    }
+    final inCombat = _character.combatContext['inCombat'] == true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(
+              avatar: Icon(
+                inCombat ? Icons.sports_martial_arts : Icons.self_improvement,
+                size: 18,
+              ),
+              label: Text(inCombat ? 'Combate ativo' : 'Fora de combate'),
+            ),
+            if (!inCombat)
+              FilledButton.icon(
+                onPressed: () =>
+                    _persist(_techniques.setCombatState(_character, true)),
+                icon: const Icon(Icons.sports_martial_arts),
+                label: const Text('Iniciar combate'),
+              ),
+            if (inCombat) ...[
+              OutlinedButton.icon(
+                onPressed: () => _persist(_techniques.advanceTurn(_character)),
+                icon: const Icon(Icons.update),
+                label: const Text('Avançar turno'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    _persist(_techniques.setCombatState(_character, false)),
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Encerrar combate'),
+              ),
+            ],
+            if (!inCombat)
+              OutlinedButton.icon(
+                onPressed: () => _showTechniqueEditor(),
+                icon: const Icon(Icons.add),
+                label: const Text('Treinar técnica'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Técnicas são aprendidas por treinamento fora de combate. Golpes especiais podem ter uso único ou recarga em turnos.',
+        ),
+        const SizedBox(height: 12),
+        if (_character.techniques.isEmpty)
+          const Text('Nenhuma técnica aprendida.')
+        else
+          for (final technique in _character.techniques) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    technique.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(_techniqueCostLabel(technique)),
+                  if (technique.damage.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Dano/efeito: ${technique.damage}'),
+                  ],
+                  if (technique.description.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(technique.description),
+                  ],
+                  if (technique.training.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text('Treinamento: ${technique.training}'),
+                  ],
+                  if (inCombat && technique.usedThisCombat) ...[
+                    const SizedBox(height: 6),
+                    const Text('Já utilizada neste combate.'),
+                  ],
+                  if (inCombat && technique.cooldownRemaining > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Disponível em ${technique.cooldownRemaining} turno(s).',
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton(
+                        onPressed:
+                            !inCombat ||
+                                technique.usedThisCombat ||
+                                technique.cooldownRemaining > 0
+                            ? null
+                            : () => _useTechnique(technique),
+                        child: const Text('Usar'),
+                      ),
+                      if (!inCombat) ...[
+                        OutlinedButton(
+                          onPressed: () => _showTechniqueEditor(technique),
+                          child: const Text('Editar'),
+                        ),
+                        TextButton(
+                          onPressed: () => _persist(
+                            _character.copyWith(
+                              techniques: _character.techniques
+                                  .where((item) => item.id != technique.id)
+                                  .toList(),
+                            ),
+                          ),
+                          child: const Text('Remover'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+      ],
+    );
+  }
+
+  String _techniqueCostLabel(CombatTechnique technique) =>
+      switch (technique.costType) {
+        'once_per_combat' => 'Uso único por combate',
+        'cooldown' => 'Recarga: ${technique.cooldownTurns} turno(s)',
+        _ => 'Sem limite especial',
+      };
+
+  Future<void> _useTechnique(CombatTechnique technique) async {
+    final result = _techniques.use(_character, technique.id);
+    if (result.error.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.error)));
+      }
+      return;
+    }
+    await _persist(result.character);
+  }
+
+  Future<void> _showTechniqueEditor([CombatTechnique? existing]) async {
+    final name = TextEditingController(text: existing?.name ?? '');
+    final damage = TextEditingController(text: existing?.damage ?? '');
+    final description = TextEditingController(
+      text: existing?.description ?? '',
+    );
+    final training = TextEditingController(text: existing?.training ?? '');
+    final cooldown = TextEditingController(
+      text:
+          '${existing?.cooldownTurns == 0 ? 1 : existing?.cooldownTurns ?? 1}',
+    );
+    var costType = existing?.costType ?? 'none';
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'Treinar técnica' : 'Editar técnica'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: name,
+                    maxLength: 120,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                  ),
+                  TextField(
+                    controller: damage,
+                    maxLength: 200,
+                    decoration: const InputDecoration(
+                      labelText: 'Dano ou sequência',
+                      hintText: 'Ex.: duas machadadas',
+                    ),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: costType,
+                    decoration: const InputDecoration(
+                      labelText: 'Limite de uso',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'none',
+                        child: Text('Sem limite especial'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'once_per_combat',
+                        child: Text('Uso único por combate'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'cooldown',
+                        child: Text('Recarga em turnos'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => costType = value ?? 'none'),
+                  ),
+                  if (costType == 'cooldown')
+                    TextField(
+                      controller: cooldown,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Turnos de recarga',
+                      ),
+                    ),
+                  TextField(
+                    controller: training,
+                    maxLength: 500,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'Treinamento'),
+                  ),
+                  TextField(
+                    controller: description,
+                    maxLength: 1200,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'Descrição'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(existing == null ? 'Aprender' : 'Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted == true) {
+      final result = _techniques.save(
+        _character,
+        name: name.text,
+        description: description.text,
+        damage: damage.text,
+        training: training.text,
+        costType: costType,
+        cooldownTurns: int.tryParse(cooldown.text) ?? 1,
+        editingId: existing?.id ?? '',
+      );
+      if (result.error.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.error)));
+      } else {
+        await _persist(result.character);
+      }
+    }
+    name.dispose();
+    damage.dispose();
+    description.dispose();
+    training.dispose();
+    cooldown.dispose();
+  }
+
   bool get _hasRuleContext {
     final race = _race == null
         ? null
@@ -522,7 +817,8 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         mechanics['conditionalRollBonuses'] is List ||
         mechanics['environmentEffects'] is List ||
         mechanics['conditionalCosts'] is List ||
-        mechanics['statusEffects'] is List;
+        mechanics['statusEffects'] is List ||
+        mechanics['connection'] is Map;
   }
 
   Widget _ruleContextSection() {
@@ -581,6 +877,13 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         description: 'Aplica o lembrete de dano racial por turno.',
       ));
     }
+    if (mechanics['connection'] is Map) {
+      options.add((
+        id: 'separatedFromConnection',
+        label: 'Separado da conexão',
+        description: 'Ativa a penalidade élfica definida pelo Mestre.',
+      ));
+    }
     final activeEffects = <String>[
       if (_character.combatContext['hotEnvironment'] == true)
         'Deslocamento: -2 m em ambiente quente.',
@@ -590,6 +893,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         'Custo adicional de Humanidade definido pelo Mestre.',
       if (_character.combatContext['blinded'] == true)
         'Cegueira: 1d4 de dano físico por turno.',
+      if (_character.combatContext['separatedFromConnection'] == true &&
+          mechanics['connection'] is Map)
+        'Conexão élfica: ${_character.raceConnectionPenalty.isEmpty ? 'penalidade definida pelo Mestre conforme a força do vínculo' : _character.raceConnectionPenalty}.',
     ];
     return Column(
       children: [

@@ -4,6 +4,7 @@ import StatBreakdown from './StatBreakdown';
 import { attributes } from '../lib/rpgData';
 import {
   attributeBreakdown,
+  attributeLabel,
   catalogGroups,
   evaluateRuleFormula,
   displayDescription,
@@ -97,8 +98,8 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
           <p className="muted">Se a imagem falhar ou estiver vazia, o fallback padrão será exibido.</p>
         </div>}
 
-        {step === 2 && <OfficialSelection entries={groups.playableRaces} selectedId={draft.raceId} onSelect={(id) => update({ raceId: id, raceVariant: '' })} empty="Nenhuma raça com regras completas foi encontrada no catálogo oficial." />}
-        {step === 2 && parsedRace && <><VariantSelection variants={parsedRace.variants} selected={draft.raceVariant} onSelect={(raceVariant) => update({ raceVariant })} /><RuleSummary entry={race} chips={parsedRace.modifiers.map((item) => `${item.targetId}: ${Number(item.value) >= 0 ? '+' : ''}${item.value}`)} lines={[...parsedRace.proficiencies, ...parsedRace.abilities, ...parsedRace.traits]} /></>}
+        {step === 2 && <OfficialSelection entries={groups.playableRaces} selectedId={draft.raceId} onSelect={(id) => update({ raceId: id, raceVariant: '', raceAttributeChoice: '', raceConnection: '', raceConnectionPenalty: '', combatContext: { ...(draft.combatContext || {}), separatedFromConnection: false } })} empty="Nenhuma raça com regras completas foi encontrada no catálogo oficial." />}
+        {step === 2 && parsedRace && <><VariantSelection variants={parsedRace.variants} selected={draft.raceVariant} onSelect={(raceVariant) => update({ raceVariant })} /><RaceSpecialChoices race={parsedRace} draft={draft} update={update} /><RuleSummary entry={race} chips={parsedRace.modifiers.map((item) => `${attributeLabel(item.targetId)}: ${Number(item.value) >= 0 ? '+' : ''}${item.value}`)} lines={[...parsedRace.proficiencies, ...parsedRace.abilities, ...parsedRace.traits]} /></>}
 
         {step === 3 && <OfficialSelection entries={groups.playableClasses} selectedId={draft.classId} onSelect={(id) => update(id === draft.classId ? {} : { classId: id, maxHp: 0, currentHp: 0, levelHistory: [] })} empty="Nenhuma classe com regras completas foi encontrada no catálogo oficial." />}
         {step === 3 && parsedClass && <RuleSummary entry={characterClass} chips={[
@@ -165,6 +166,25 @@ function OfficialSelection({ entries, selectedId, onSelect, empty }) {
 function VariantSelection({ variants, selected, onSelect }) {
   if (!variants?.length) return null;
   return <div className="variantSelection"><span>Variante</span><div className="segmented">{variants.map((variant) => <button key={variant.id} className={selected === variant.id ? 'active' : ''} onClick={() => onSelect(variant.id)}>{variant.name}</button>)}</div>{!selected && <p className="validationWarning">Selecione uma variante para aplicar os bônus específicos.</p>}</div>;
+}
+
+function RaceSpecialChoices({ race, draft, update }) {
+  const choice = race.metadata?.attributeChoice;
+  const connection = race.metadata?.connection;
+  if (!choice && !connection) return null;
+  return <div className="raceSpecialChoices">
+    {choice && <label>Atributo versátil
+      <select value={draft.raceAttributeChoice || ''} onChange={(event) => update({ raceAttributeChoice: event.target.value })}>
+        <option value="">Selecione o atributo que recebe +{Number(choice.amount || 0)}</option>
+        {(choice.allowed || []).map((id) => <option key={id} value={id}>{attributeLabel(id)}</option>)}
+      </select>
+    </label>}
+    {connection && <>
+      <label>Conexão élfica<input value={draft.raceConnection || ''} maxLength="300" onChange={(event) => update({ raceConnection: event.target.value })} placeholder="Algo, alguém ou ser com quem o Elfo criou seu vínculo" /></label>
+      <label>Penalidade ao se separar <textarea rows="3" value={draft.raceConnectionPenalty || ''} maxLength="500" onChange={(event) => update({ raceConnectionPenalty: event.target.value })} placeholder="Opcional: o Mestre define conforme a força da conexão" /></label>
+      <p className="muted">A conexão é obrigatória. A penalidade não possui valor fixo no documento e permanece sob decisão do Mestre.</p>
+    </>}
+  </div>;
 }
 
 function RuleSummary({ entry, chips, lines }) {

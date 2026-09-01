@@ -305,3 +305,22 @@ test('Genasi respeita Religião mínima e Bugbear ativa Furtividade no escuro', 
   const dark = recalculateCharacter({ ...emptyCharacter(), raceId: bugbear.id, classId: neutralClass.id, combatContext: { ...emptyCharacter().combatContext, darkOrNight: true } }, { entries: [bugbear, neutralClass] });
   assert.equal(dark.modifiers.find((item) => item.sourceType === 'race_condition')?.value, 1);
 });
+
+test('Elfo aplica Constituição, atributo versátil e exige conexão', () => {
+  const neutralClass = entryFor(classRules[0]);
+  const elf = {
+    id: 'elf', name: 'Elfo', category: 'Racas',
+    description: '<!-- RPG_RULES_JSON_START -->\n{"type":"race","attributeBonuses":{"constitution":1},"attributeChoice":{"amount":1,"allowed":["strength","dexterity","intelligence","charisma","faith"]},"connection":{"required":true,"penaltyMasterDefined":true}}\n<!-- RPG_RULES_JSON_END -->',
+  };
+  const character = recalculateCharacter({
+    ...emptyCharacter(), name: 'Aelar', raceId: elf.id, classId: neutralClass.id,
+    raceAttributeChoice: 'dexterity', raceConnection: 'Seu arco ancestral', maxHp: 10,
+  }, { entries: [elf, neutralClass] });
+  assert.equal(attributeBreakdown(character, 'constitution').total, 1);
+  assert.equal(attributeBreakdown(character, 'dexterity').total, 1);
+  assert.equal(validateCharacter(character, { entries: [elf, neutralClass] }).isValid, true);
+
+  const invalid = validateCharacter({ ...character, raceAttributeChoice: '', raceConnection: '' }, { entries: [elf, neutralClass] });
+  assert.ok(invalid.errors.some((message) => message.includes('atributo versátil')));
+  assert.ok(invalid.errors.some((message) => message.includes('conexão racial')));
+});

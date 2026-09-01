@@ -13,6 +13,7 @@ const characterClass = {
   id: 'class-archer', name: 'Arqueiro Espectral', category: 'Classes',
   ...metadata({
     type: 'class',
+    usesWeapons: true,
     defense: { base: 0, terms: { constitution: .4, dexterity: .3, intelligence: .3 } },
     mana: { base: 15, terms: { intelligence: 1, dexterity: 2 } },
     attributeProgression: [{ from: 1, to: 3, perLevel: { dexterity: 1 } }],
@@ -57,4 +58,53 @@ test('backend migra referência antiga pelo nome mas rejeita item personalizado'
     () => validateAndNormalizeCharacter(custom, catalog),
     (error) => error.statusCode === 400 && error.details.errors.some((message) => message.includes('não oficial')),
   );
+});
+
+test('Elfo aplica Constituição, escolha versátil e exige uma conexão', () => {
+  const elf = {
+    id: 'race-elf', name: 'Elfo', category: 'Racas',
+    ...metadata({
+      type: 'race',
+      attributeBonuses: { constitution: 1 },
+      attributeChoice: { amount: 1, allowed: ['strength', 'dexterity', 'intelligence', 'charisma', 'faith'] },
+      connection: { required: true, penaltyMasterDefined: true },
+    }),
+  };
+  const value = {
+    ...zenitti(),
+    raceId: elf.id,
+    raceVariant: '',
+    raceAttributeChoice: 'dexterity',
+    raceConnection: 'O arco herdado de sua família.',
+  };
+  const result = validateAndNormalizeCharacter(value, { entries: [elf, characterClass, sword] });
+  assert.equal(result.derivedStats.effectiveAttributes.constitution, 5);
+  assert.equal(result.derivedStats.effectiveAttributes.dexterity, 4);
+
+  assert.throws(
+    () => validateAndNormalizeCharacter({ ...value, raceAttributeChoice: '', raceConnection: '' }, { entries: [elf, characterClass, sword] }),
+    (error) => error.statusCode === 400
+      && error.details.errors.some((message) => message.includes('atributo versátil'))
+      && error.details.errors.some((message) => message.includes('conexão racial')),
+  );
+});
+
+test('técnicas de combate preservam recarga apenas durante o combate', () => {
+  const technique = {
+    id: 'technique_double_slash', name: 'Golpe duplo', damage: '2 ataques',
+    description: 'Executa dois golpes como uma técnica.', training: 'Treino com espada.',
+    costType: 'cooldown', cooldownTurns: 3, cooldownRemaining: 2,
+    createdAt: new Date().toISOString(),
+  };
+  const active = validateAndNormalizeCharacter({
+    ...zenitti(), techniques: [technique], combatContext: { inCombat: true },
+  }, catalog);
+  assert.equal(active.techniques[0].cooldownRemaining, 2);
+  assert.equal(active.derivedStats.canLearnCombatTechniques, true);
+
+  const resting = validateAndNormalizeCharacter({
+    ...zenitti(), techniques: [technique], combatContext: { inCombat: false },
+  }, catalog);
+  assert.equal(resting.techniques[0].cooldownRemaining, 0);
+  assert.equal(resting.techniques[0].usedThisCombat, false);
 });

@@ -98,17 +98,27 @@ $sections = @(
 
 for ($index = 0; $index -lt $sections.Count; $index++) {
   $start = Find-Line $lines $sections[$index].Source
-  $end = if ($index -lt $sections.Count - 1) { Find-Line $lines $sections[$index + 1].Source ($start + 1) } else { Find-Line $lines 'Raças' ($start + 1) }
+  $end = if ($index -lt $sections.Count - 1) {
+    Find-Line $lines $sections[$index + 1].Source ($start + 1)
+  } else {
+    Find-Line $lines 'Técnicas de Combate Geral' ($start + 1)
+  }
   $slice = $lines[$start..($end - 1)]
   Upsert-Entry 'Classes' $sections[$index].Card (Section-Description $sections[$index].Card $slice)
 }
+
+$techniquesStart = Find-Line $lines 'Técnicas de Combate Geral'
+$techniquesEnd = Find-Line $lines 'Raças' ($techniquesStart + 1)
+$techniquesLines = $lines[$techniquesStart..($techniquesEnd - 1)]
+Upsert-Entry 'Sistema' 'Técnicas de Combate Geral' (Section-Description 'Técnicas de Combate Geral' $techniquesLines)
 
 $raceSections = @(
   @{ Source = 'Thri-kreen'; Card = 'Thri-kreen' },
   @{ Source = 'Vedalken'; Card = 'Vedalken' },
   @{ Source = 'Lizardfolk'; Card = 'Lizardfolk' },
   @{ Source = 'Genasi'; Card = 'Genasi' },
-  @{ Source = 'Bugbear'; Card = 'Bugbear' }
+  @{ Source = 'Bugbear'; Card = 'Bugbear' },
+  @{ Source = 'Elfos'; Card = 'Elfo' }
 )
 
 for ($index = 0; $index -lt $raceSections.Count; $index++) {
@@ -127,4 +137,4 @@ $corruptionEnd = Find-Line $lines 'Classes' ($corruptionStart + 1)
 $corruptionLines = $lines[$corruptionStart..($corruptionEnd - 1)]
 Upsert-Entry 'Sistema' 'Corrupção e Magia Demoníaca' (Section-Description 'Corrupção e Magia Demoníaca' $corruptionLines)
 
-Write-Host 'Textos de classes, raças e Corrupção sincronizados. Execute npm run sync:rules para publicar os metadados calculáveis.'
+Write-Host 'Textos de classes, raças, Técnicas de Combate e Corrupção sincronizados. Execute npm run sync:rules para publicar os metadados calculáveis.'

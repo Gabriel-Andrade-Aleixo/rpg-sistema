@@ -32,6 +32,7 @@ class CharacterRecalculationService {
     final characterClass = _parser.parseClass(classEntry);
     final modifiers = [
       ...race.modifiers,
+      ..._raceChoiceModifiers(normalizedCharacter, race),
       ..._conditionalRaceModifiers(normalizedCharacter, race),
       ...characterClass.modifiers,
       ..._classProgressionModifiers(
@@ -138,6 +139,28 @@ class CharacterRecalculationService {
       );
     }
     return result;
+  }
+
+  List<Modifier> _raceChoiceModifiers(Character character, OfficialRace race) {
+    final raw = race.mechanics['attributeChoice'];
+    if (raw is! Map) return const [];
+    final rule = Map<String, dynamic>.from(raw);
+    final allowed = ((rule['allowed'] as List?) ?? const [])
+        .map((item) => item.toString())
+        .toList();
+    if (!allowed.contains(character.raceAttributeChoice)) return const [];
+    return [
+      Modifier(
+        id: '${race.entry.id}_choice_${character.raceAttributeChoice}',
+        sourceId: race.entry.id,
+        sourceName: '${race.entry.name} · Versatilidade',
+        sourceType: 'race_choice',
+        targetType: 'attribute',
+        targetId: character.raceAttributeChoice,
+        value: (rule['amount'] as num?) ?? 0,
+        description: 'Atributo escolhido na criação pela versatilidade racial.',
+      ),
+    ];
   }
 
   List<Modifier> _classProgressionModifiers(

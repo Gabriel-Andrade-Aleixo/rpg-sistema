@@ -175,6 +175,53 @@ void main() {
     expect(dexterityBonus, 2);
   });
 
+  test('Elfo recebe Constituição e o atributo versátil escolhido', () {
+    final elf = CatalogEntry(
+      id: 'elf',
+      name: 'Elfo',
+      description: rules({
+        'type': 'race',
+        'attributeBonuses': {'constitution': 1},
+        'attributeChoice': {
+          'id': 'versatile_attribute',
+          'amount': 1,
+          'allowed': [
+            'strength',
+            'dexterity',
+            'intelligence',
+            'charisma',
+            'faith',
+          ],
+        },
+        'connection': {'required': true, 'penaltyMasterDefined': true},
+      }),
+      category: 'Racas',
+    );
+    final recalculated = CharacterRecalculationService().recalculate(
+      Character(
+        id: 'elf-test',
+        name: 'Elfo teste',
+        playerName: 'Jogador',
+        raceId: elf.id,
+        classId: characterClass.id,
+        raceAttributeChoice: AttributeId.dexterity.name,
+        raceConnection: 'Irmã de juramento',
+      ),
+      OfficialCatalog(entries: [elf, characterClass]),
+    );
+
+    double bonusFor(AttributeId attribute) => recalculated.modifiers
+        .where(
+          (item) =>
+              item.targetType == 'attribute' && item.targetId == attribute.name,
+        )
+        .fold(0, (sum, item) => sum + item.value);
+
+    expect(bonusFor(AttributeId.constitution), 1);
+    expect(bonusFor(AttributeId.dexterity), 2);
+    expect(bonusFor(AttributeId.strength), 0);
+  });
+
   test('IDs antigos do Trello resolvem Zenitti e calculam CA oficial 14', () {
     final catalog = OfficialCatalog(entries: [race, characterClass]);
     final recalculated = CharacterRecalculationService().recalculate(

@@ -20,6 +20,7 @@ O Supabase/Postgres não é acessado diretamente pelo web. O navegador conversa 
 ## Recursos
 
 - Criação guiada por raças, classes e itens oficiais do catálogo no Supabase.
+- Regras dos Elfos e Técnicas de Combate Geral compartilhadas com o aplicativo mobile.
 - Bônus raciais e de equipamentos com origem rastreável.
 - Fórmulas oficiais de vida, mana e recursos de classe.
 - Vida inicial e por nível usando rolagem animada ou valor fixo.

@@ -30,15 +30,42 @@ class RuleValidationService {
         if (race.variants.isNotEmpty && race.selectedVariant == null) {
           errors.add('Selecione uma variante válida da raça.');
         }
+        final choice = race.mechanics['attributeChoice'];
+        if (choice is Map) {
+          final allowed = ((choice['allowed'] as List?) ?? const [])
+              .map((item) => item.toString())
+              .toList();
+          if (!allowed.contains(character.raceAttributeChoice)) {
+            errors.add('Escolha o atributo versátil concedido pela raça Elfo.');
+          }
+        }
+        final connection = race.mechanics['connection'];
+        if (connection is Map &&
+            connection['required'] == true &&
+            character.raceConnection.trim().isEmpty) {
+          errors.add('Descreva a conexão racial do Elfo.');
+        }
       }
     }
     final classEntry = catalog.findById(character.classId);
     if (classEntry == null) {
       errors.add('Selecione uma classe do catálogo oficial.');
-    } else if (!classEntry.hasStructuredRules) {
-      errors.add(
-        'A classe selecionada ainda não possui regras completas do sistema.',
-      );
+    } else {
+      if (!classEntry.hasStructuredRules) {
+        errors.add(
+          'A classe selecionada ainda não possui regras completas do sistema.',
+        );
+      } else if (character.techniques.isNotEmpty) {
+        final characterClass = const TrelloParserService().parseClass(
+          classEntry,
+        );
+        if (characterClass.manaFormula != null &&
+            characterClass.mechanics['usesWeapons'] != true) {
+          errors.add(
+            'A classe precisa lutar sem Mana ou usar armas para aprender técnicas de combate.',
+          );
+        }
+      }
     }
     if (character.attributes.values.any((value) => value < 0)) {
       errors.add('Atributos não podem ser negativos.');

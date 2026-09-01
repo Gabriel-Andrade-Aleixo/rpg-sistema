@@ -138,6 +138,9 @@ class Character {
     required this.playerName,
     required this.raceId,
     this.raceVariant = '',
+    this.raceAttributeChoice = '',
+    this.raceConnection = '',
+    this.raceConnectionPenalty = '',
     required this.classId,
     this.visibility = 'public',
     bool? isPrivate,
@@ -176,6 +179,7 @@ class Character {
     List<HumanityRecord>? humanityHistory,
     List<CorruptionRecord>? corruptionHistory,
     List<CharacterSpell>? spells,
+    List<CombatTechnique>? techniques,
     List<ActionUseRecord>? actionHistory,
     this.syncRevision = 0,
     DateTime? createdAt,
@@ -202,6 +206,7 @@ class Character {
        humanityHistory = humanityHistory ?? [],
        corruptionHistory = corruptionHistory ?? [],
        spells = spells ?? [],
+       techniques = techniques ?? [],
        actionHistory = actionHistory ?? [],
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
@@ -211,6 +216,9 @@ class Character {
   final String playerName;
   final String raceId;
   final String raceVariant;
+  final String raceAttributeChoice;
+  final String raceConnection;
+  final String raceConnectionPenalty;
   final String classId;
   final String visibility;
   final bool isPrivate;
@@ -249,6 +257,7 @@ class Character {
   final List<HumanityRecord> humanityHistory;
   final List<CorruptionRecord> corruptionHistory;
   final List<CharacterSpell> spells;
+  final List<CombatTechnique> techniques;
   final List<ActionUseRecord> actionHistory;
   final int syncRevision;
   final DateTime createdAt;
@@ -275,6 +284,8 @@ class Character {
     'coldEnvironment': false,
     'withoutSunlight': false,
     'blinded': false,
+    'inCombat': false,
+    'separatedFromConnection': false,
   };
 
   double get totalInventoryWeight =>
@@ -286,6 +297,9 @@ class Character {
     'playerName': playerName,
     'raceId': raceId,
     'raceVariant': raceVariant,
+    'raceAttributeChoice': raceAttributeChoice,
+    'raceConnection': raceConnection,
+    'raceConnectionPenalty': raceConnectionPenalty,
     'classId': classId,
     'visibility': visibility,
     'isPrivate': isPrivate,
@@ -330,6 +344,7 @@ class Character {
         .map((item) => item.toJson())
         .toList(),
     'spells': spells.map((item) => item.toJson()).toList(),
+    'techniques': techniques.map((item) => item.toJson()).toList(),
     'actionHistory': actionHistory.map((item) => item.toJson()).toList(),
     'syncRevision': syncRevision,
     'createdAt': createdAt.toIso8601String(),
@@ -344,6 +359,9 @@ class Character {
       playerName: json['playerName']?.toString() ?? '',
       raceId: json['raceId']?.toString() ?? 'human',
       raceVariant: json['raceVariant']?.toString() ?? '',
+      raceAttributeChoice: json['raceAttributeChoice']?.toString() ?? '',
+      raceConnection: json['raceConnection']?.toString() ?? '',
+      raceConnectionPenalty: json['raceConnectionPenalty']?.toString() ?? '',
       classId: json['classId']?.toString() ?? 'barbarian',
       visibility: json['visibility']?.toString() == 'private'
           ? 'private'
@@ -472,6 +490,12 @@ class Character {
             (item) => CharacterSpell.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      techniques: ((json['techniques'] as List?) ?? [])
+          .whereType<Map>()
+          .map(
+            (item) => CombatTechnique.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(),
       actionHistory: ((json['actionHistory'] as List?) ?? [])
           .whereType<Map>()
           .map(
@@ -490,6 +514,9 @@ class Character {
     String? playerName,
     String? raceId,
     String? raceVariant,
+    String? raceAttributeChoice,
+    String? raceConnection,
+    String? raceConnectionPenalty,
     String? classId,
     String? visibility,
     bool? isPrivate,
@@ -528,6 +555,7 @@ class Character {
     List<HumanityRecord>? humanityHistory,
     List<CorruptionRecord>? corruptionHistory,
     List<CharacterSpell>? spells,
+    List<CombatTechnique>? techniques,
     List<ActionUseRecord>? actionHistory,
     int? syncRevision,
     DateTime? createdAt,
@@ -538,6 +566,9 @@ class Character {
     playerName: playerName ?? this.playerName,
     raceId: raceId ?? this.raceId,
     raceVariant: raceVariant ?? this.raceVariant,
+    raceAttributeChoice: raceAttributeChoice ?? this.raceAttributeChoice,
+    raceConnection: raceConnection ?? this.raceConnection,
+    raceConnectionPenalty: raceConnectionPenalty ?? this.raceConnectionPenalty,
     classId: classId ?? this.classId,
     visibility: visibility ?? this.visibility,
     isPrivate: isPrivate ?? this.isPrivate,
@@ -578,6 +609,7 @@ class Character {
     humanityHistory: humanityHistory ?? List.of(this.humanityHistory),
     corruptionHistory: corruptionHistory ?? List.of(this.corruptionHistory),
     spells: spells ?? List.of(this.spells),
+    techniques: techniques ?? List.of(this.techniques),
     actionHistory: actionHistory ?? List.of(this.actionHistory),
     syncRevision: syncRevision ?? this.syncRevision,
     createdAt: createdAt ?? this.createdAt,

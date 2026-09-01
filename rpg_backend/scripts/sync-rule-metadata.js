@@ -30,6 +30,7 @@ const classes = {
   },
   'Arqueiro Espectral': {
     id: 'spectral_archer', defense: f(0, { constitution: .4, dexterity: .3, intelligence: .3 }),
+    usesWeapons: true,
     hp: hp(f(10, { constitution: 2, dexterity: 2 }), f(5, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 4, ...f(4, { constitution: 1 }) }),
     mana: f(15, { intelligence: 1, dexterity: 2 }), resources: [{ id: 'foco', name: 'Foco', maximum: f(6, { intelligence: 2 }) }, { id: 'cadencia', name: 'Cadência', maximum: f(3) }],
     actions: [
@@ -60,6 +61,7 @@ const classes = {
   },
   Paladino: {
     id: 'paladin', defense: f(0, { dexterity: .2, constitution: .4, faith: .4 }),
+    usesWeapons: true,
     hp: hp(f(18, { constitution: 3 }), f(8, { constitution: 1 }), { die: 12, ...f(0, { constitution: 1 }) }, { die: 6, ...f(6, { constitution: 1 }) }),
     divineResistance: { formula: '1d20 + floor(Humanidade / 10)', difficulty: [{ from: 81, to: 100, value: null }, { from: 51, to: 80, value: 15 }, { from: 26, to: 50, value: 18 }, { from: 11, to: 25, value: 18 }, { from: 2, to: 10, value: 19 }] },
     attributeProgression: [progression(1, 3, { faith: 1 }), progression(4, 10, { faith: 1, constitution: 1 })],
@@ -67,12 +69,14 @@ const classes = {
   },
   Ladino: {
     id: 'rogue', defense: f(0, { constitution: .7, dexterity: .3 }),
+    usesWeapons: true,
     hp: hp(f(12, { constitution: 3 }), f(5, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 4, ...f(4, { constitution: 1 }) }),
     attributeProgression: [progression(1, 3, { dexterity: 1 }), progression(4, 10, { dexterity: 1, intelligence: 1 })],
     allowedCombatXpAttributes: ['dexterity', 'intelligence'],
   },
   Ranger: {
     id: 'ranger', defense: f(0, { constitution: .6, dexterity: .3, intelligence: .1 }),
+    usesWeapons: true,
     conditionalDefense: { enemyWithinTwoMeters: f(0, { dexterity: .6, constitution: .3, intelligence: .1 }) },
     hp: hp(f(14, { constitution: 3 }), f(6, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 4, ...f(5, { constitution: 1 }) }),
     attributeProgression: [progression(1, 3, { dexterity: 1 }), progression(4, 10, { dexterity: 1, intelligence: 1 })],
@@ -87,6 +91,7 @@ const classes = {
   },
   Lutador: {
     id: 'fighter', defense: f(0, { constitution: .4, strength: .3, dexterity: .3 }),
+    usesWeapons: true,
     hp: hp(f(18, { constitution: 3 }), f(7, { constitution: 1 }), { die: 10, ...f(0, { constitution: 1 }) }, { die: 6, ...f(5, { constitution: 1 }) }),
     attributeProgression: [progression(1, 3, { strength: 1 }), progression(4, 10, { strength: 1, dexterity: 1 })],
     allowedCombatXpAttributes: ['strength', 'dexterity', 'constitution'],
@@ -126,14 +131,50 @@ const races = {
     statusEffects: [{ status: 'blinded', damagePerTurn: '1d4', damageType: 'physical' }],
     traits: ['Visão no escuro', '+1 Furtividade somente à noite ou em local escuro', '-1 dano físico recebido', 'Imunidade ao frio', 'Em local quente perde 2m de deslocamento', 'Cegueira causa 1d4 de dano físico por turno'],
   },
+  Elfo: {
+    id: 'elf', attributeBonuses: { constitution: 1 },
+    attributeChoice: {
+      id: 'versatile_attribute', amount: 1,
+      allowed: ['strength', 'dexterity', 'intelligence', 'charisma', 'faith'],
+    },
+    connection: { required: true, penaltyMasterDefined: true },
+    traits: ['Longevidade: +1 Constituição', 'Versatilidade: escolha outro atributo para receber +1', 'Cria uma conexão poderosa com algo, alguém ou algum ser', 'Separar-se da conexão aplica penalidade definida pelo Mestre conforme a força do vínculo'],
+  },
+};
+
+const systemRules = {
+  'Técnicas de Combate Geral': {
+    schemaVersion: 1,
+    type: 'system_rule',
+    id: 'general_combat_techniques',
+    learnOutsideCombatOnly: true,
+    eligibility: { withoutMana: true, weaponUser: true },
+    costs: ['none', 'once_per_combat', 'cooldown'],
+  },
 };
 
 try {
   await updateEntries('Classes', classes, 'class');
   await updateEntries('Racas', races, 'race');
-  console.log(`Metadados sincronizados: ${Object.keys(classes).length} classes e ${Object.keys(races).length} raças.`);
+  await updateSystemEntries(systemRules);
+  console.log(`Metadados sincronizados: ${Object.keys(classes).length} classes, ${Object.keys(races).length} raças e Técnicas de Combate.`);
 } finally {
   await closePool();
+}
+
+async function updateSystemEntries(rules) {
+  const catalog = await loadCatalogFromDatabase();
+  const entries = catalog.entries.filter((entry) => normalizeText(entry.category) === normalizeText('Sistema'));
+  for (const [name, metadata] of Object.entries(rules)) {
+    const existing = entries.find((entry) => normalizeText(entry.name) === normalizeText(name));
+    const description = replaceMetadataBlock(existing?.description || `# ${name}`, metadata);
+    await upsertCatalogEntry('Sistema', {
+      name,
+      description,
+      labels: [{ id: 'label_system_rule', name: 'Regra do Sistema', color: 'purple' }],
+      metadata,
+    });
+  }
 }
 
 async function updateEntries(categoryName, rules, type) {

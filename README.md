@@ -12,7 +12,8 @@ As regras oficiais de classes, raças, atributos, perícias, progressão e comba
 
 - Autenticação, sessões e múltiplas fichas por usuário.
 - Fichas públicas ou privadas; outros jogadores veem apenas o resumo permitido.
-- Classes, raças, variantes, atributos, perícias e proficiências estruturadas.
+- Classes, raças, variantes, atributos, perícias e proficiências estruturadas, incluindo a versatilidade e a conexão dos Elfos.
+- Técnicas de Combate Geral com treinamento fora de combate, uso único e recarga por turnos.
 - Progressão por nível, XP geral, XP por atributo e XP por área.
 - Controle de HP, mana, foco, Humanidade, Corrupção e testes contra a morte.
 - Métodos de vida fixo, rolado e híbrido, com resultados por nível.

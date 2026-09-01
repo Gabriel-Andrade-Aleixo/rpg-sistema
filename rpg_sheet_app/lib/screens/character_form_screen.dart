@@ -44,6 +44,8 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
   final _background = TextEditingController();
   final _lore = TextEditingController();
   final _notes = TextEditingController();
+  final _raceConnection = TextEditingController();
+  final _raceConnectionPenalty = TextEditingController();
   final _initialHealthRoll = TextEditingController();
   late Character _character;
   int _step = 0;
@@ -79,6 +81,8 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
     _background.text = _character.background;
     _lore.text = _character.lore;
     _notes.text = _character.notes.join('\n');
+    _raceConnection.text = _character.raceConnection;
+    _raceConnectionPenalty.text = _character.raceConnectionPenalty;
     _character = _recalculation.recalculate(_character, widget.catalog);
   }
 
@@ -90,6 +94,8 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
     _background.dispose();
     _lore.dispose();
     _notes.dispose();
+    _raceConnection.dispose();
+    _raceConnectionPenalty.dispose();
     _initialHealthRoll.dispose();
     super.dispose();
   }
@@ -116,6 +122,8 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
           .map((line) => line.trim())
           .where((line) => line.isNotEmpty)
           .toList(),
+      raceConnection: _raceConnection.text.trim(),
+      raceConnectionPenalty: _raceConnectionPenalty.text.trim(),
     );
     updated = _recalculation.recalculate(updated, widget.catalog);
     final validation = _validator.validate(updated, widget.catalog);
@@ -323,10 +331,23 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
             for (final race in races)
               DropdownMenuItem(value: race.id, child: Text(race.name)),
           ],
-          onChanged: (value) => _update(
-            (character) =>
-                character.copyWith(raceId: value ?? '', raceVariant: ''),
-          ),
+          onChanged: (value) {
+            _raceConnection.clear();
+            _raceConnectionPenalty.clear();
+            _update(
+              (character) => character.copyWith(
+                raceId: value ?? '',
+                raceVariant: '',
+                raceAttributeChoice: '',
+                raceConnection: '',
+                raceConnectionPenalty: '',
+                combatContext: {
+                  ...character.combatContext,
+                  'separatedFromConnection': false,
+                },
+              ),
+            );
+          },
         ),
         if (_race case final race?) ...[
           const SizedBox(height: 12),
@@ -347,6 +368,7 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
             ),
             const SizedBox(height: 12),
           ],
+          ..._raceSpecialFields(race),
           Text(
             race.entry.displayDescription,
             maxLines: 10,
@@ -369,6 +391,81 @@ class _CharacterFormScreenState extends State<CharacterFormScreen> {
       ],
     );
   }
+
+  List<Widget> _raceSpecialFields(OfficialRace race) {
+    final fields = <Widget>[];
+    final rawChoice = race.mechanics['attributeChoice'];
+    if (rawChoice is Map) {
+      final choice = Map<String, dynamic>.from(rawChoice);
+      final allowed = ((choice['allowed'] as List?) ?? const [])
+          .map((item) => item.toString())
+          .toList();
+      fields.addAll([
+        DropdownButtonFormField<String>(
+          initialValue: allowed.contains(_character.raceAttributeChoice)
+              ? _character.raceAttributeChoice
+              : null,
+          decoration: InputDecoration(
+            labelText:
+                'Atributo versátil (+${(choice['amount'] as num?)?.toInt() ?? 0})',
+          ),
+          items: [
+            for (final id in allowed)
+              DropdownMenuItem(value: id, child: Text(_attributeLabel(id))),
+          ],
+          onChanged: (value) => _update(
+            (character) => character.copyWith(raceAttributeChoice: value ?? ''),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ]);
+    }
+    final rawConnection = race.mechanics['connection'];
+    if (rawConnection is Map) {
+      fields.addAll([
+        TextFormField(
+          controller: _raceConnection,
+          maxLength: 300,
+          decoration: const InputDecoration(
+            labelText: 'Conexão élfica',
+            hintText: 'Algo, alguém ou ser ligado ao personagem',
+          ),
+          validator: (value) =>
+              rawConnection['required'] == true &&
+                  (value == null || value.trim().isEmpty)
+              ? 'Descreva a conexão racial do Elfo.'
+              : null,
+          onChanged: (value) =>
+              _update((character) => character.copyWith(raceConnection: value)),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _raceConnectionPenalty,
+          maxLength: 500,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Penalidade ao se separar',
+            hintText: 'Opcional: definida pelo Mestre conforme o vínculo',
+          ),
+          onChanged: (value) => _update(
+            (character) => character.copyWith(raceConnectionPenalty: value),
+          ),
+        ),
+        const Text(
+          'A conexão é obrigatória. O documento deixa a penalidade sob decisão do Mestre.',
+        ),
+        const SizedBox(height: 12),
+      ]);
+    }
+    return fields;
+  }
+
+  String _attributeLabel(String id) =>
+      AttributeId.values
+          .where((attribute) => attribute.name == id)
+          .map((attribute) => attribute.label)
+          .firstOrNull ??
+      id;
 
   Widget _classStep() {
     final classes = widget.catalog.playableClasses;

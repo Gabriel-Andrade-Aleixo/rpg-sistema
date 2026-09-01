@@ -62,7 +62,13 @@ const races = <RaceDefinition>[
   RaceDefinition(
     id: 'elf',
     name: 'Elfo',
-    traits: ['Sem bonus mecanico definido no documento.'],
+    attributeBonuses: {AttributeId.constitution: 1},
+    traits: [
+      'Recebe +1 Constituição pela longevidade.',
+      'Escolhe outro atributo para receber +1 no início do jogo.',
+      'Cria uma conexão com algo, alguém ou algum ser.',
+      'Ao se separar da conexão, sofre penalidade definida pelo Mestre.',
+    ],
   ),
   RaceDefinition(
     id: 'dwarf',
@@ -132,7 +138,12 @@ const races = <RaceDefinition>[
   RaceDefinition(
     id: 'bugbear',
     name: 'Bugbear',
-    traits: ['Sem bonus mecanico definido no documento.'],
+    attributeBonuses: {AttributeId.strength: 1, AttributeId.dexterity: 1},
+    traits: [
+      '+1 Furtividade à noite ou em local escuro.',
+      'Reduz dano físico recebido em 1.',
+      'Imune ao frio e enxerga no escuro.',
+    ],
   ),
   RaceDefinition(
     id: 'firbolg',

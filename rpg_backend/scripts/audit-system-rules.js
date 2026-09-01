@@ -114,6 +114,11 @@ const expectedRaces = {
   Lizardfolk: { attributeBonuses: { strength: 1 }, statBonuses: { armorClass: 2 }, healingCapPercent: 75 },
   Genasi: { skillMinimums: { religiao: 6 }, immunities: ['fire'] },
   Bugbear: { attributeBonuses: { strength: 1, dexterity: 1 }, immunities: ['cold'] },
+  Elfo: {
+    attributeBonuses: { constitution: 1 },
+    attributeChoice: { amount: 1, allowed: ['strength', 'dexterity', 'intelligence', 'charisma', 'faith'] },
+    connection: { required: true, penaltyMasterDefined: true },
+  },
 };
 
 const expectedSkills = {
@@ -157,6 +162,11 @@ try {
     if (expected.skillMinimums) assert.deepEqual(metadata.skillMinimums, expected.skillMinimums, `${name}: patamar de perícia`);
     if (expected.healingCapPercent) assert.equal(metadata.healingCapPercent, expected.healingCapPercent, `${name}: limite de cura`);
     if (expected.immunities) assert.deepEqual(metadata.immunities, expected.immunities, `${name}: imunidades`);
+    if (expected.attributeChoice) {
+      assert.equal(metadata.attributeChoice?.amount, expected.attributeChoice.amount, `${name}: valor da escolha de atributo`);
+      assert.deepEqual(metadata.attributeChoice?.allowed, expected.attributeChoice.allowed, `${name}: atributos selecionáveis`);
+    }
+    if (expected.connection) assert.deepEqual(metadata.connection, expected.connection, `${name}: conexão racial`);
   }
 
   const attributeNames = {
@@ -182,6 +192,12 @@ try {
   assert.ok(corruptionEntry, 'Regra de Corrupção ausente');
   assert.ok(normalize(corruptionEntry.description).includes('100 de corrupcao'), 'Faixa de 100 de Corrupção ausente');
   assert.ok(normalize(corruptionEntry.description).includes('manifestacao demoniaca'), 'Manifestação Demoníaca ausente');
+  const techniquesEntry = findEntry(systemEntries, 'Técnicas de Combate Geral');
+  assert.ok(techniquesEntry, 'Regra de Técnicas de Combate ausente');
+  assert.ok(normalize(techniquesEntry.description).includes('praticar fora de combate com treinamento'), 'Treinamento de técnicas fora de combate ausente');
+  assert.ok(normalize(techniquesEntry.description).includes('uso unico por combate'), 'Custo de uso único por combate ausente');
+  assert.ok(normalize(techniquesEntry.description).includes('esperar turnos pra usar de novo'), 'Recarga em turnos ausente');
+  assert.equal(metadataOf(techniquesEntry)?.learnOutsideCombatOnly, true, 'Metadados das Técnicas de Combate ausentes');
 
   const unsupported = classEntries
     .filter((entry) => !metadataOf(entry))
@@ -192,7 +208,7 @@ try {
     .map((entry) => entry.name)
     .sort();
 
-  console.log(`Auditoria do DOCX concluída: ${Object.keys(expectedClasses).length} classes, ${Object.keys(expectedRaces).length} raças, ${Object.keys(expectedSkills).length} perícias, Humanidade, Corrupção e XP corretos.`);
+  console.log(`Auditoria do DOCX concluída: ${Object.keys(expectedClasses).length} classes, ${Object.keys(expectedRaces).length} raças, ${Object.keys(expectedSkills).length} perícias, Técnicas de Combate, Humanidade, Corrupção e XP corretos.`);
   console.log(`Classes de catálogo sem regras jogáveis: ${unsupported.join(', ') || 'nenhuma'}.`);
   console.log(`Raças de catálogo sem regras jogáveis: ${unsupportedRaces.join(', ') || 'nenhuma'}.`);
 } finally {
@@ -226,7 +242,8 @@ function assertDocumentRules(text) {
   const required = [
     'barbaro', 'mago', 'arqueiro espectral', 'maestro tatico', 'clerigo',
     'paladino', 'ladino', 'ranger', 'bardo', 'lutador', 'thri-kreen',
-    'vedalken', 'lizardfolk', 'genasi', 'bugbear',
+    'vedalken', 'lizardfolk', 'genasi', 'bugbear', 'elfos',
+    'tecnicas de combate geral', 'praticar fora de combate com treinamento',
     'dano base fe 2',
     'defesa destreza 60 constituicao 30 inteligencia 10',
     'comecam o game com 1 em forca 1 em destreza e 1 em furtividade',
