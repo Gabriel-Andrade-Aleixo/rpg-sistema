@@ -68,6 +68,11 @@ class _RpgSheetAppState extends State<RpgSheetApp> {
       themeMode: _themeMode,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      scrollBehavior: const RunalithScrollBehavior(),
+      builder: (context, child) => ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: FutureBuilder<AuthSession?>(
         future: _sessionFuture,
         builder: (context, snapshot) {

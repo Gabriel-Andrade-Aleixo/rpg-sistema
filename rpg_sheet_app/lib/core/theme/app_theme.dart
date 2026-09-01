@@ -29,6 +29,17 @@ abstract final class AppColors {
   static const warning = Color(0xFFE1AA5C);
 }
 
+class RunalithScrollBehavior extends MaterialScrollBehavior {
+  const RunalithScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+}
+
 abstract final class AppTheme {
   static ThemeData get dark => _build(Brightness.dark);
   static ThemeData get light => _build(Brightness.light);
