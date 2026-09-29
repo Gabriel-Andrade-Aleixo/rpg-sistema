@@ -14,6 +14,17 @@ test('preserva query string das rotas do backend', () => {
   );
 });
 
+test('restaura a rota usando req.query fornecido pela Vercel', () => {
+  assert.equal(
+    restoreOriginalUrl('/api', {
+      __runalith_path: 'catalog',
+      refresh: 'true',
+      tag: ['arma', 'rara'],
+    }),
+    '/catalog?refresh=true&tag=arma&tag=rara',
+  );
+});
+
 test('preserva segmentos dinâmicos codificados', () => {
   assert.equal(
     restoreOriginalUrl(
