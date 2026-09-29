@@ -77,6 +77,25 @@ test('o adaptador catch-all entrega /health ao backend', async () => {
   });
 });
 
+test('o entrypoint central entrega o rewrite da Vercel ao /health', async () => {
+  const { requestHandler } = await import('../server.js');
+  const response = createMockResponse();
+  const request = {
+    method: 'GET',
+    url: '/api?__runalith_path=health&path=health',
+    headers: { host: 'rpg-sistema-api-liart.vercel.app' },
+  };
+
+  await requestHandler(request, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: true,
+    backend: 'rpg-backend',
+    storage: 'postgres',
+  });
+});
+
 function createMockResponse() {
   return {
     statusCode: null,

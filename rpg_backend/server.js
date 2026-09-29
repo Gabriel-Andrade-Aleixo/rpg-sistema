@@ -53,7 +53,7 @@ export async function requestHandler(req, res) {
 
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
-    const path = url.pathname;
+    const path = resolveRequestPath(url);
 
     if (req.method === 'GET' && path === '/health') {
       return sendJson(res, 200, { ok: true, backend: 'rpg-backend', storage: 'postgres' });
@@ -294,6 +294,12 @@ if (!process.env.VERCEL) {
 }
 
 export default requestHandler;
+
+export function resolveRequestPath(url) {
+  const rewrittenPath = url.searchParams.get('__runalith_path');
+  if (rewrittenPath == null) return url.pathname;
+  return `/${rewrittenPath}`.replace(/\/{2,}/g, '/');
+}
 
 function loadDotEnv() {
   if (!fs.existsSync('.env')) return;
