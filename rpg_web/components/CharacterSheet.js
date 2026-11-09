@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Backpack, BookOpen, Dices, Download, LayoutDashboard, Plus, Sparkles, Swords, TrendingUp, X } from 'lucide-react';
 import RpgImage from './RpgImage';
 import StatBreakdown from './StatBreakdown';
 import { attributes, currencyLabel, unique } from '../lib/rpgData';
 import {
   attributeBreakdown,
+  attributePointCost,
   activeDefenseFormula,
-  allowedCombatXpTargets,
   armorClassValue,
   catalogGroups,
   classXpRequired,
@@ -37,18 +37,19 @@ import {
 } from '../lib/humanity';
 import { calculateClassSessionXp, classXpCriteria } from '../lib/experience';
 import { changeHitPoints, recordDeathSave, resetDeathSaves } from '../lib/deathSaves';
-import { infusionDamage, infusionManaCost, spectralInfusions, spectralSpellPresets, useInfusion, useMagicArrow, useSpell } from '../lib/classActions';
+import { advanceSpectralTurn, infusionDamage, infusionManaCost, religionGrade, religionValue, spectralInfusions, spectralSpellPresets, useInfusion, useMagicArrow, useSpell } from '../lib/classActions';
 import { advanceDemonicTurn, changeCorruption, corruptionStatus, corruptionValue, demonicDamageBonus, demonicIncomingDamageBonus, demonicSpellCost, isDemonicSpell, toggleDemonicZone } from '../lib/corruption';
-import { advanceTechniqueTurn, canLearnCombatTechniques, saveCombatTechnique, setTechniqueCombatState, techniqueCostOptions, useCombatTechnique } from '../lib/combatTechniques';
+import { advanceTechniqueTurn, canLearnCombatTechniques, recordTechniqueTraining, saveCombatTechnique, setTechniqueCombatState, techniqueCostOptions, useCombatTechnique } from '../lib/combatTechniques';
 
-export default function CharacterSheet({ character, catalog, onEdit, onUpdate, requestRoll }) {
-  const [levelUp, setLevelUp] = useState(false);
+export default function CharacterSheet({ character, catalog, onEdit, onUpdate, requestRoll, activeTab = 'summary', onTabChange }) {
+  const [xpDialog, setXpDialog] = useState('');
   const [exporting, setExporting] = useState(false);
   const [proficiencyFilter, setProficiencyFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState('summary');
+  const setActiveTab = onTabChange || (() => {});
   const race = findEntry(catalog, character.raceId);
   const classEntry = findEntry(catalog, character.classId);
   const parsedClass = classEntry ? parseClass(classEntry) : null;
+  const canLevelUp = character.level < 10 && Number(character.classXp || 0) >= classXpRequired(character.level);
   const demonicOnly = corruptionStatus(character).demonicOnly;
 
   function persist(changes) {
@@ -70,7 +71,11 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
   }
 
   function recordRoll(record) {
-    persist({ rollHistory: [record, ...(character.rollHistory || [])].slice(0, 30) });
+    const luckBonus = Number(character.resources?.pendingLuckBonus || 0);
+    const adjusted = luckBonus > 0
+      ? { ...record, finalResult: Number(record.finalResult || 0) + luckBonus, modifiers: [...(record.modifiers || []), { id: 'luck_bonus', sourceId: character.id, sourceName: 'Sorte', sourceType: 'luck', targetType: 'roll', targetId: record.type, value: luckBonus }] }
+      : record;
+    persist({ rollHistory: [adjusted, ...(character.rollHistory || [])].slice(0, 30), resources: luckBonus > 0 ? { ...character.resources, pendingLuckBonus: 0 } : character.resources });
   }
 
   function moveItem(item, target) {
@@ -95,6 +100,24 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
     persist({ inventory: [item, ...(character.inventory || [])] });
   }
 
+  function addCustomItem(draft) {
+    const target = draft.equip ? 'equipment' : 'inventory';
+    const item = {
+      id: `item_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      catalogId: '',
+      name: draft.name.trim(),
+      type: draft.type,
+      quantity: Math.max(1, Number(draft.quantity) || 1),
+      weight: Math.max(0, Number(draft.weight) || 0),
+      bonus: draft.bonus,
+      description: draft.description.trim(),
+      notes: '',
+      imageUrl: draft.imageUrl.trim(),
+      requirements: '',
+    };
+    persist({ [target]: [item, ...(character[target] || [])] });
+  }
+
   const proficiencyRows = useMemo(() => {
     const official = catalogGroups(catalog).skills;
     if (!official.length) return (character.proficiencies || []).map((name) => ({ id: name, name, proficient: true, source: 'Raça ou classe', category: inferProficiencyCategory(name) }));
@@ -116,8 +139,19 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       <section className="sheetHeader spanTwo">
         <RpgImage src={character.imageUrl} alt={character.name} className="sheetPortrait" fallback="◇" />
         <div><span className="eyebrow">Ficha ativa</span><h2>{character.name}</h2><p>{race?.name || 'Raça indisponível'} · {classEntry?.name || 'Classe indisponível'} · Nível {character.level}</p></div>
-        <div className="headerActions"><button className="primaryButton" disabled={!parsedClass} onClick={() => setLevelUp(true)}>{character.level >= 10 ? 'Registrar XP / Excelência' : 'Subir de nível'}</button><button className="ghostButton" onClick={onEdit}>Editar</button><button className="iconButton" aria-label="Exportar ficha" title="Exportar ficha" onClick={() => setExporting(true)}><Download aria-hidden="true" /></button></div>
+        <div className="headerActions"><button className="primaryButton" disabled={!parsedClass} onClick={() => { setActiveTab('progress'); setXpDialog(canLevelUp ? 'level' : 'register'); }}>{canLevelUp ? 'Subir de nível' : 'Registrar XP'}</button><button className="ghostButton" onClick={onEdit}>Editar</button><button className="iconButton" aria-label="Exportar ficha" title="Exportar ficha" onClick={() => setExporting(true)}><Download aria-hidden="true" /></button></div>
       </section>
+
+      <nav className="sheetTabs spanTwo" aria-label="Seções da ficha">
+        {[
+          ['summary', 'Resumo', LayoutDashboard],
+          ['combat', 'Combate', Swords],
+          ['spells', 'Magias', Sparkles],
+          ['progress', 'Evolução', TrendingUp],
+          ['inventory', 'Itens', Backpack],
+          ['description', 'História', BookOpen],
+        ].map(([id, label, Icon]) => <button key={id} className={activeTab === id ? 'active' : ''} aria-current={activeTab === id ? 'page' : undefined} onClick={() => setActiveTab(id)}><Icon aria-hidden="true" /><span>{label}</span></button>)}
+      </nav>
 
       {activeTab === 'summary' && <>
       <Panel title="Vida e recursos" subtitle="Controles da sessão">
@@ -126,13 +160,15 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
         {character.currentHp === 0 && <DeathSaves character={character} onChange={persistCharacter} />}
       </Panel>
 
+      <DefensePanel character={character} classEntry={classEntry} parsedClass={parsedClass} />
+
       <HumanityPanel character={character} classEntry={classEntry} onChange={persist} requestRoll={requestRoll} recordRoll={recordRoll} />
       <CorruptionPanel character={character} onChange={persistCharacter} />
+      <LuckPanel character={character} onChange={persistCharacter} requestRoll={requestRoll} recordRoll={recordRoll} />
 
       <Panel title="Pontos" subtitle="Progressão da classe">
         <div className="metricGrid"><Metric label="Nível" value={character.level} /><Metric label="XP de classe" value={`${character.classXp || 0}/${classXpRequired(character.level)}`} /><Metric label="Habilidade" value={character.skillPoints || 0} /><Metric label="Classe" value={character.classPoints || 0} /></div>
       </Panel>
-      <DefensePanel character={character} classEntry={classEntry} parsedClass={parsedClass} />
       </>}
 
       {activeTab === 'combat' && <>
@@ -179,13 +215,15 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
         <ItemList items={character.equipment || []} catalog={catalog} actionLabel="Desequipar" onAction={(item) => moveItem(item, 'inventory')} />
       </Panel>
 
-      <Panel title="Inventário" subtitle="Itens oficiais" wide>
+      <Panel title="Inventário" subtitle="Catálogo e itens personalizados" wide>
         <CatalogItemPicker catalog={catalog} onAdd={addCatalogItem} />
+        <CustomItemCreator onCreate={addCustomItem} />
         <ItemList items={character.inventory || []} catalog={catalog} actionLabel="Equipar" onAction={(item) => moveItem(item, 'equipment')} onQuantity={changeQuantity} onRemove={(item) => persist({ inventory: character.inventory.filter((current) => current.id !== item.id) })} />
       </Panel>
       </>}
 
       {activeTab === 'progress' && <>
+      <ClassProgressPanel character={character} onRegister={() => setXpDialog('register')} onLevelUp={() => setXpDialog('level')} />
       <ExperiencePanel character={character} catalog={catalog} classEntry={classEntry} onChange={persist} />
       <Panel title="Habilidades" subtitle="Desbloqueadas pelo nível" wide>
         <RuleCards values={character.abilities} empty="Nenhuma habilidade identificada para este nível." onUse={(value) => simpleRoll('ability', value)} />
@@ -203,18 +241,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       <Panel title="Anotações"><p className="preWrap">{character.notes?.join('\n') || 'Sem anotações.'}</p></Panel>
       </>}
 
-      <nav className="sheetTabs spanTwo" aria-label="Seções da ficha">
-        {[
-          ['summary', 'Resumo', LayoutDashboard],
-          ['combat', 'Combate', Swords],
-          ['spells', 'Magias', Sparkles],
-          ['progress', 'Evolução', TrendingUp],
-          ['inventory', 'Itens', Backpack],
-          ['description', 'História', BookOpen],
-        ].map(([id, label, Icon]) => <button key={id} className={activeTab === id ? 'active' : ''} onClick={() => setActiveTab(id)}><Icon aria-hidden="true" /><span>{label}</span></button>)}
-      </nav>
-
-      {levelUp && <LevelUpDialog character={character} catalog={catalog} parsedClass={parsedClass} onCancel={() => setLevelUp(false)} onConfirm={(next) => { setLevelUp(false); onUpdate(recalculateCharacter(next, catalog)); }} />}
+      {xpDialog && <LevelUpDialog key={xpDialog} mode={xpDialog} character={character} catalog={catalog} parsedClass={parsedClass} onCancel={() => setXpDialog('')} onConfirm={(next) => { setXpDialog(''); onUpdate(recalculateCharacter(next, catalog)); }} />}
       {exporting && <ExportDialog character={character} onClose={() => setExporting(false)} />}
     </div>
   );
@@ -228,13 +255,33 @@ function Metric({ label, value }) { return <div className="metric"><span>{label}
 
 function DefensePanel({ character, classEntry, parsedClass }) {
   const activeFormula = activeDefenseFormula(character, classEntry);
-  const terms = activeFormula?.terms || [];
-  const formula = terms.length
-    ? `Defesa = floor(${terms.map((term) => `${attributeLabel(term.attribute)} × ${Math.round(Number(term.weight) * 100)}%`).join(' + ')})`
-    : 'Defesa = floor(Destreza × 70% + Constituição × 30%)';
-  const equipment = (character.modifiers || []).filter((item) => item.sourceType === 'equipment' && item.targetType === 'stat' && ['defense', 'armorClass'].includes(item.targetId));
+  const terms = activeFormula?.terms?.length ? activeFormula.terms : [
+    { attribute: 'dexterity', weight: .7 },
+    { attribute: 'constitution', weight: .3 },
+  ];
+  const termValues = terms.map((term) => {
+    const value = attributeBreakdown(character, term.attribute).total;
+    return { ...term, value, contribution: value * Number(term.weight || 0) };
+  });
+  const formulaBase = Number(activeFormula?.base || 0);
+  const rawDefense = formulaBase + termValues.reduce((sum, term) => sum + term.contribution, 0);
+  const roundedDefense = Math.max(0, Math.floor(rawDefense));
+  const statModifiers = (character.modifiers || []).filter((item) => item.targetType === 'stat' && ['defense', 'armorClass', 'armorclass'].includes(item.targetId));
+  const defenseBonus = statModifiers.filter((item) => item.targetId === 'defense').reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const armorClassBonus = statModifiers.filter((item) => ['armorClass', 'armorclass'].includes(item.targetId)).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const defense = defenseValue(character, classEntry);
+  const armorClass = armorClassValue(character, classEntry);
   const adaptive = Boolean(character.combatContext?.enemyWithinTwoMeters && parsedClass?.metadata?.conditionalDefense?.enemyWithinTwoMeters);
-  return <Panel title="Defesa e Classe de Armadura" subtitle={adaptive ? 'Defesa adaptativa ativa' : 'Valores atuais'}><div className="metricGrid"><Metric label="Defesa" value={defenseValue(character, classEntry)} /><Metric label="CA" value={armorClassValue(character, classEntry)} /></div><p className="formulaText">{formula}<br />CA = 10 + Defesa + bônus direto de CA</p>{equipment.length > 0 && <div className="modifierSummary">{equipment.map((item) => <span key={item.id}>{item.sourceName}: +{item.value} {item.targetId === 'defense' ? 'Defesa' : 'CA'}</span>)}</div>}</Panel>;
+  return <Panel title="Defesa e Classe de Armadura" subtitle={adaptive ? 'Defesa adaptativa ativa' : 'Valores atuais'}><div className="metricGrid"><Metric label="Defesa" value={defense} /><Metric label="CA" value={armorClass} /></div><div className="calculationBreakdown"><strong>Cálculo bruto</strong>{termValues.map((term) => <span key={term.attribute}>{attributeLabel(term.attribute)}: {term.value} × {Math.round(Number(term.weight) * 100)}% = {formatDecimal(term.contribution)}</span>)}{formulaBase !== 0 && <span>Base da fórmula: {formatSigned(formulaBase)}</span>}<span>Soma bruta: {formatDecimal(rawDefense)} → floor = {roundedDefense}</span><span>Defesa: {roundedDefense} {formatSigned(defenseBonus)} = {defense}</span><span>CA: 10 + {defense} {formatSigned(armorClassBonus)} = {armorClass}</span></div>{statModifiers.length > 0 && <div className="modifierSummary">{statModifiers.map((item) => <span key={item.id}>{item.sourceName}: {formatSigned(item.value)} {item.targetId === 'defense' ? 'Defesa' : 'CA'}</span>)}</div>}</Panel>;
+}
+
+function formatDecimal(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function formatSigned(value) {
+  const number = Number(value || 0);
+  return `${number >= 0 ? '+' : '-'} ${formatDecimal(Math.abs(number))}`;
 }
 
 function HitPointControl({ character, raceEntry, onChange }) {
@@ -258,8 +305,7 @@ function HitPointControl({ character, raceEntry, onChange }) {
   }
 
   function heal(longRest = false) {
-    const targetMaximum = longRest ? maximum : Math.min(maximum, cap);
-    onChange(changeHitPoints(character, Math.min(targetMaximum, current + delta)));
+    onChange(changeHitPoints(character, longRest ? maximum : Math.min(cap, current + delta)));
   }
 
   const percent = maximum ? current / maximum * 100 : 0;
@@ -296,7 +342,7 @@ function RuleContextPanel({ character, raceEntry, classEntry, onChange }) {
 }
 
 function CombatTechniquesPanel({ character, parsedClass, onChange }) {
-  const emptyForm = { name: '', damage: '', description: '', training: '', costType: 'none', cooldownTurns: 1 };
+  const emptyForm = { name: '', damage: '', description: '', training: '', costType: 'none', cooldownTurns: 1, learningDifficulty: 15, executionDifficulty: 10 };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -323,14 +369,22 @@ function CombatTechniquesPanel({ character, parsedClass, onChange }) {
       training: technique.training || '',
       costType: technique.costType || 'none',
       cooldownTurns: technique.cooldownTurns || 1,
+      learningDifficulty: technique.learningDifficulty || 15,
+      executionDifficulty: technique.executionDifficulty || 10,
     });
     setEditingId(technique.id);
     setShowForm(true);
     setError('');
   }
 
-  function use(technique) {
-    const result = useCombatTechnique(character, technique.id);
+  function use(technique, executionSucceeded = false) {
+    const result = useCombatTechnique(character, technique.id, { executionSucceeded });
+    setError(result.error);
+    if (!result.error) onChange(result.character);
+  }
+
+  function train(technique, succeeded) {
+    const result = recordTechniqueTraining(character, technique.id, succeeded);
     setError(result.error);
     if (!result.error) onChange(result.character);
   }
@@ -358,6 +412,8 @@ function CombatTechniquesPanel({ character, parsedClass, onChange }) {
       <label>Dano ou sequência<input maxLength="200" value={form.damage} onChange={(event) => setForm({ ...form, damage: event.target.value })} placeholder="Ex.: duas machadadas" /></label>
       <label>Limite de uso<select value={form.costType} onChange={(event) => setForm({ ...form, costType: event.target.value })}>{techniqueCostOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
       {form.costType === 'cooldown' && <label>Recarga<input type="number" min="1" max="99" value={form.cooldownTurns} onChange={(event) => setForm({ ...form, cooldownTurns: event.target.value })} /></label>}
+      <label>CD de aprendizado<input type="number" min="1" max="30" value={form.learningDifficulty} onChange={(event) => setForm({ ...form, learningDifficulty: event.target.value })} /></label>
+      <label>CD de execução<input type="number" min="1" max="29" value={form.executionDifficulty} onChange={(event) => setForm({ ...form, executionDifficulty: event.target.value })} /></label>
       <label className="spanForm">Treinamento<textarea rows="2" maxLength="500" value={form.training} onChange={(event) => setForm({ ...form, training: event.target.value })} placeholder="Como a técnica foi praticada e aprendida" /></label>
       <label className="spanForm">Descrição<textarea rows="3" maxLength="1200" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
       <button className="primaryButton" type="submit">{editingId ? 'Salvar técnica' : 'Aprender técnica'}</button>
@@ -365,7 +421,10 @@ function CombatTechniquesPanel({ character, parsedClass, onChange }) {
     {!(character.techniques || []).length ? <p className="muted">Nenhuma técnica aprendida.</p> : <div className="techniqueGrid">{character.techniques.map((technique) => {
       const blocked = technique.usedThisCombat || Number(technique.cooldownRemaining || 0) > 0;
       const limit = technique.costType === 'once_per_combat' ? 'Uso único por combate' : technique.costType === 'cooldown' ? `Recarga: ${technique.cooldownTurns} turno(s)` : 'Sem limite especial';
-      return <article key={technique.id}><div><strong>{technique.name}</strong><span>{limit}</span></div>{technique.damage && <p><b>Dano/efeito:</b> {technique.damage}</p>}{technique.description && <p>{technique.description}</p>}{technique.training && <small>Treinamento: {technique.training}</small>}{inCombat && blocked && <small>{technique.usedThisCombat ? 'Já utilizada neste combate.' : `Disponível em ${technique.cooldownRemaining} turno(s).`}</small>}<div className="quickActions"><button className="primaryButton compactButton" disabled={!inCombat || blocked} onClick={() => use(technique)}>Usar</button>{!inCombat && <><button onClick={() => edit(technique)}>Editar</button><button className="removeButton" onClick={() => onChange({ ...character, techniques: character.techniques.filter((item) => item.id !== technique.id) })}>Remover</button></>}</div></article>;
+      const state = technique.learningState || 'unlearned';
+      const stateLabel = state === 'mastered' ? 'Dominada' : state === 'partial' ? 'Aprendizado parcial' : 'Em treinamento';
+      const fighterBonus = parsedClass?.metadata?.id === 'fighter' ? ' · Guerreiro +1 nos testes' : '';
+      return <article key={technique.id}><div><strong>{technique.name}</strong><span>{stateLabel} · {limit}</span></div>{technique.damage && <p><b>Dano/efeito:</b> {technique.damage}</p>}{technique.description && <p>{technique.description}</p>}{technique.training && <small>Treinamento: {technique.training}</small>}<small>{Number(technique.trainingHours || 0)}h treinadas · Aprendizado CD {technique.learningDifficulty || 15}: {technique.trainingSuccesses || 0}/3 · Execução CD {technique.executionDifficulty || 10}: {technique.executionSuccesses || 0}/3 · Domínio por treino: {technique.masteryTrainingSuccesses || 0}/5{fighterBonus}</small>{inCombat && blocked && <small>{technique.usedThisCombat ? 'Já utilizada neste combate.' : `Disponível em ${technique.cooldownRemaining} turno(s).`}</small>}<div className="quickActions">{inCombat && state === 'partial' ? <><button className="primaryButton compactButton" disabled={blocked} onClick={() => use(technique, true)}>Execução bem-sucedida</button><button disabled={blocked} onClick={() => setError(`A execução falhou contra a CD ${technique.executionDifficulty || 10}; a técnica não foi aplicada.`)}>Execução falhou</button></> : <button className="primaryButton compactButton" disabled={!inCombat || blocked || state !== 'mastered'} onClick={() => use(technique)}>Usar</button>}{!inCombat && <>{state !== 'mastered' && <><button onClick={() => train(technique, true)}>Treino: sucesso</button><button onClick={() => train(technique, false)}>Treino: falha</button></>}<button onClick={() => edit(technique)}>Editar</button><button className="removeButton" onClick={() => onChange({ ...character, techniques: character.techniques.filter((item) => item.id !== technique.id) })}>Remover</button></>}</div></article>;
     })}</div>}
   </Panel>;
 }
@@ -395,7 +454,8 @@ function ClassActionsPanel({ character, classEntry, onChange }) {
 
   return <Panel title="Flecha Mágica" subtitle="Disparo 2d4 e infusões do Arqueiro Espectral" wide>
     {error && <p className="validationError">{error}</p>}
-    <section className="classActionBlock"><h4>Flecha Mágica e infusões</h4><p className="muted">A Flecha Mágica causa 2d4 de dano. Informe o total obtido; a infusão escolhida aprimora o disparo e aplica Cadência, Mana e Foco.</p><div className="arrowInputs"><label>Resultado dos 2d4<input type="number" min="2" max="8" value={arrowDamage} onChange={(event) => setArrowDamage(event.target.value)} /></label><label>Ataques no turno<input type="number" min="1" value={attacksThisTurn} onChange={(event) => setAttacksThisTurn(event.target.value)} /></label></div><div className="infusionGrid">{spectralInfusions.map((infusion) => { const cadence = Number(character.resources?.cadenciaCurrent || 0); const mana = infusionManaCost(infusion, cadence, attacksThisTurn); const damage = infusionDamage(infusion, arrowDamage, cadence); return <article key={infusion.id}><div><strong>Infusão: {infusion.name}</strong><span>{mana} PM · {infusion.focusCost} Foco</span></div><p>{infusion.effect}</p><div className="arrowDamage"><span>Dano da Flecha Mágica</span><strong>{damage.hit}</strong>{infusion.id === 'spectral' && <><span>Dano no erro</span><strong>{damage.miss}</strong></>}</div><button className="primaryButton compactButton" onClick={() => applyInfusion(infusion)}>Aplicar infusão</button></article>; })}</div></section>
+    <div className="quickActions"><button onClick={() => onChange(advanceSpectralTurn(character, { attacked: true }))}>Novo turno · atacou</button><button onClick={() => onChange(advanceSpectralTurn(character, { attacked: false }))}>Não atacou</button><button onClick={() => onChange(advanceSpectralTurn(character, { tookDamage: true }))}>Sofreu dano</button></div>
+    <section className="classActionBlock"><h4>Flecha Mágica e infusões</h4><p className="muted">A Flecha Mágica causa 2d4 de dano. Informe o total obtido; a infusão escolhida aprimora o disparo e aplica Cadência, Mana e Foco.</p><div className="arrowInputs"><label>Resultado dos 2d4<input type="number" min="2" max="8" value={arrowDamage} onChange={(event) => setArrowDamage(event.target.value)} /></label><label>Ataques no turno<input type="number" min="1" value={attacksThisTurn} onChange={(event) => setAttacksThisTurn(event.target.value)} /></label></div><div className="infusionGrid">{spectralInfusions.map((infusion) => { const cadence = Number(character.resources?.cadenciaCurrent || 0); const mana = infusionManaCost(infusion, cadence, attacksThisTurn); const damage = infusionDamage(infusion, arrowDamage, cadence); return <article key={infusion.id}><div><strong>Infusão: {infusion.name}</strong><span>{mana} PM · {infusion.focusCost} Foco</span></div><p>{infusion.effect}</p><div className="arrowDamage"><span>Dano da Flecha Mágica</span><strong>{damage.hit}</strong>{damage.chainTargets > 0 && <><span>Alvos encadeados</span><strong>{damage.chainTargets}</strong></>}</div><button className="primaryButton compactButton" onClick={() => applyInfusion(infusion)}>Aplicar infusão</button></article>; })}</div></section>
   </Panel>;
 }
 
@@ -403,6 +463,7 @@ function SpellbookPanel({ character, catalog, classEntry, onChange }) {
   const emptyForm = { name: '', type: 'Comum', topic: 'Sem tópico', description: '', damage: '', range: '', manaCost: 0, focusCost: 0, humanityCost: 0 };
   const [form, setForm] = useState(emptyForm);
   const [query, setQuery] = useState('');
+  const pickerRef = useRef(null);
   const [showCustom, setShowCustom] = useState(false);
   const [editingTopic, setEditingTopic] = useState('');
   const [topicDraft, setTopicDraft] = useState('');
@@ -428,6 +489,8 @@ function SpellbookPanel({ character, catalog, classEntry, onChange }) {
     const parsed = parseCatalogSpell(entry);
     const spell = { ...parsed, id: `spell_${Date.now()}_${entry.id}`, successfulUses: 0, createdAt: new Date().toISOString() };
     onChange({ ...character, spells: [spell, ...(character.spells || [])] });
+    setQuery('');
+    if (pickerRef.current) pickerRef.current.open = false;
   }
 
   function addClassSpell(preset) {
@@ -477,15 +540,33 @@ function SpellbookPanel({ character, catalog, classEntry, onChange }) {
 
   return <>
     <Panel title="Grimório do personagem" subtitle="Magias organizadas por tópico" wide>
-      <div className="spellResources"><Metric label="Mana" value={`${character.currentMana}/${character.maxMana}`} /><Metric label="Foco" value={character.resources?.focoCurrent ?? '—'} /><Metric label="Humanidade" value={humanityValue(character)} /><Metric label="Corrupção" value={corruptionValue(character)} /><Metric label="Magias" value={(character.spells || []).length} /></div>
+      <div className="spellResources"><Metric label="Mana" value={`${character.currentMana}/${character.maxMana}`} /><Metric label="Foco" value={character.resources?.focoCurrent ?? '—'} /><Metric label="Religião" value={`${religionValue(character)} · Grau ${religionGrade(character)}`} /><Metric label="Humanidade" value={humanityValue(character)} /><Metric label="Corrupção" value={corruptionValue(character)} /><Metric label="Magias" value={(character.spells || []).length} /></div>
       {error && <p className="validationError">{error}</p>}
       {normalize(classEntry?.name || '') === 'arqueiro espectral' && <div className="spectralSpellNotice"><div><strong>Flecha Mágica</strong><span>Dano natural: 2d4</span></div><p>Precisão, Impacto, Perfurante, Cinética e Espectral são infusões que aprimoram a mesma Flecha Mágica.</p><div className="classSpellPresets">{spectralSpellPresets.filter((preset) => !knownActionIds.has(preset.actionId)).map((preset) => <button className="ghostButton compactButton" key={preset.actionId} onClick={() => addClassSpell(preset)}><Plus aria-hidden="true" />{preset.name}</button>)}</div><div className="arrowInputs"><label>Resultado dos 2d4<input type="number" min="2" max="8" value={arrowDamage} onChange={(event) => setArrowDamage(event.target.value)} /></label><label>Ataques no turno<input type="number" min="1" value={attacksThisTurn} onChange={(event) => setAttacksThisTurn(event.target.value)} /></label></div></div>}
-      <div className="spellbookActions"><details className="catalogSpellPicker"><summary>Adicionar magia existente</summary><label>Buscar no catálogo<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, grau, escola ou efeito" /></label><div>{available.length ? available.slice(0, 60).map((entry) => { const parsed = parseCatalogSpell(entry); return <article key={entry.id}><RpgImage src={entry.imageUrl} alt={entry.name} className="spellCatalogImage" fallback="✦" /><div><strong>{entry.name}</strong><span>{parsed.topic} · {parsed.manaCost} PM · {parsed.humanityCost} HM</span><small>{parsed.damage || parsed.description}</small></div><button className="primaryButton compactButton" onClick={() => addCatalogSpell(entry)}>Adicionar</button></article>; }) : <p className="muted">Nenhuma magia disponível para esta busca.</p>}</div></details><button className="ghostButton" onClick={() => setShowCustom(!showCustom)}>{showCustom ? 'Cancelar criação' : 'Criar magia personalizada'}</button></div>
+      <div className="spellbookActions"><details ref={pickerRef} className="catalogSpellPicker"><summary>Adicionar magia existente</summary><label>Buscar no catálogo<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, grau, escola ou efeito" /></label><div>{available.length ? available.slice(0, 60).map((entry) => { const parsed = parseCatalogSpell(entry); return <article key={entry.id}><RpgImage src={entry.imageUrl} alt={entry.name} className="spellCatalogImage" fallback="✦" /><div><strong>{entry.name}</strong><span>{parsed.topic} · {parsed.manaCost} PM · {parsed.humanityCost} HM</span><small>{parsed.damage || parsed.description}</small></div><button className="primaryButton compactButton" onClick={() => addCatalogSpell(entry)}>Adicionar</button></article>; }) : <p className="muted">Nenhuma magia disponível para esta busca.</p>}</div></details><button className="ghostButton" onClick={() => setShowCustom(!showCustom)}>{showCustom ? 'Cancelar criação' : 'Criar magia personalizada'}</button></div>
       {showCustom && <form className="spellForm customSpellForm" onSubmit={addCustomSpell}><label>Nome<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Tópico<input value={form.topic} onChange={(event) => setForm({ ...form, topic: event.target.value })} /></label><label>Tipo<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Comum</option><option>Espiritual</option><option>Divina</option><option>Feitiço</option><option>Demoníaca</option></select></label><label>Mana<input type="number" min="0" value={form.manaCost} onChange={(event) => setForm({ ...form, manaCost: event.target.value })} /></label><label>Foco<input type="number" min="0" value={form.focusCost} onChange={(event) => setForm({ ...form, focusCost: event.target.value })} /></label><label>Humanidade<input type="number" min="0" value={form.humanityCost} onChange={(event) => setForm({ ...form, humanityCost: event.target.value })} /></label><label>Dano ou efeito<input value={form.damage} onChange={(event) => setForm({ ...form, damage: event.target.value })} /></label><label>Alcance<input value={form.range} onChange={(event) => setForm({ ...form, range: event.target.value })} /></label><label className="spanForm">Descrição<textarea rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><button className="primaryButton" type="submit">Criar magia</button></form>}
-      {!grouped.length ? <div className="spellbookEmpty"><Sparkles aria-hidden="true" /><p>Adicione magias do catálogo oficial para montar o grimório.</p></div> : <div className="spellTopics">{grouped.map(([topic, spells]) => <section key={topic}><header><div><span>Tópico</span><h4>{topic}</h4></div><strong>{spells.length}</strong></header><div className="spellList">{spells.map((spell) => { const manaCost = isDemonicSpell(spell) ? demonicSpellCost(character, spell.manaCost) : spell.manaCost; return <article key={spell.id}><RpgImage src={spell.imageUrl} alt="" className="spellImage" fallback="✦" /><div className="spellMain"><div><strong>{spell.name}</strong><span>{spell.type} · {manaCost} PM{spell.focusCost ? ` · ${spell.focusCost} Foco` : ''}{spell.humanityCost ? ` · ${spell.humanityCost} HM` : ''}</span><small>{Number(spell.successfulUses || 0) >= 3 ? 'Estável após 3 sucessos' : `${spell.successfulUses || 0}/3 usos bem-sucedidos`}</small></div>{spell.damage && <p><b>Dano/Efeito:</b> {spell.damage}{isDemonicSpell(spell) && demonicDamageBonus(character) > 0 ? ` · +${demonicDamageBonus(character)} pela Corrupção` : ''}</p>}{spell.range && <p><b>Alcance:</b> {spell.range}</p>}<p className="preWrap">{spell.description || 'Sem descrição.'}</p>{editingTopic === spell.id ? <div className="topicEditor"><input aria-label={`Tópico de ${spell.name}`} value={topicDraft} onChange={(event) => setTopicDraft(event.target.value)} /><button className="primaryButton compactButton" onClick={() => saveTopic(spell)}>Salvar</button><button className="ghostButton compactButton" onClick={() => setEditingTopic('')}>Cancelar</button></div> : <button className="topicButton" onClick={() => { setEditingTopic(spell.id); setTopicDraft(spell.topic || 'Sem tópico'); }}>Organizar tópico</button>}<div className="quickActions"><button className="primaryButton compactButton" onClick={() => cast(spell, true)}>Usar com sucesso</button><button className="ghostButton compactButton" onClick={() => cast(spell, false)}>Registrar falha</button><button className="removeButton compactButton" onClick={() => removeSpell(spell)}>Remover</button></div></div></article>; })}</div></section>)}</div>}
+      {!grouped.length ? <div className="spellbookEmpty"><Sparkles aria-hidden="true" /><p>Adicione magias do catálogo oficial para montar o grimório.</p></div> : <div className="spellTopics">{grouped.map(([topic, spells]) => <section key={topic}><header><div><span>Tópico</span><h4>{topic}</h4></div><strong>{spells.length}</strong></header><div className="spellList">{spells.map((spell) => { const manaCost = isDemonicSpell(spell) ? demonicSpellCost(character, spell.manaCost) : spell.manaCost; return <article key={spell.id}><RpgImage src={spell.imageUrl} alt="" className="spellImage" fallback="✦" /><div className="spellMain"><div><strong>{spell.name}</strong><span>{spell.type} · {manaCost} PM{spell.focusCost ? ` · ${spell.focusCost} Foco` : ''}{spell.humanityCost ? ` · ${spell.humanityCost} HM` : ''}</span><small>{Number(spell.successfulUses || 0) >= 3 ? 'Estável após 3 sucessos' : `${spell.successfulUses || 0}/3 usos bem-sucedidos`}</small></div>{spell.damage && <p><b>Dano/Efeito:</b> {spell.damage}{isDemonicSpell(spell) && demonicDamageBonus(character) > 0 ? ` · +${demonicDamageBonus(character)} pela Corrupção` : ''}</p>}{spell.range && <p><b>Alcance:</b> {spell.range}</p>}<details className="spellDescription"><summary>Descrição</summary><p className="preWrap">{spell.description || 'Sem descrição.'}</p></details>{editingTopic === spell.id ? <div className="topicEditor"><input aria-label={`Tópico de ${spell.name}`} value={topicDraft} onChange={(event) => setTopicDraft(event.target.value)} /><button className="primaryButton compactButton" onClick={() => saveTopic(spell)}>Salvar</button><button className="ghostButton compactButton" onClick={() => setEditingTopic('')}>Cancelar</button></div> : <button className="topicButton" onClick={() => { setEditingTopic(spell.id); setTopicDraft(spell.topic || 'Sem tópico'); }}>Organizar tópico</button>}<div className="quickActions"><button className="primaryButton compactButton" onClick={() => cast(spell, true)}>Usar com sucesso</button><button className="ghostButton compactButton" onClick={() => cast(spell, false)}>Registrar falha</button><button className="removeButton compactButton" onClick={() => removeSpell(spell)}>Remover</button></div></div></article>; })}</div></section>)}</div>}
       {!!character.actionHistory?.length && <details className="xpHistory"><summary>Histórico de uso</summary>{character.actionHistory.slice(0, 20).map((action) => <p key={action.id}><b>{action.name}</b> · {action.result || 'Usada'} · {action.manaSpent} PM · {action.focusSpent} Foco · {action.humanitySpent} Humanidade</p>)}</details>}
     </Panel>
   </>;
+}
+
+function LuckPanel({ character, onChange, requestRoll, recordRoll }) {
+  const luck = Math.max(0, Math.min(3, Number(character.resources?.luck || 0)));
+
+  function consume() {
+    if (!luck) return;
+    const label = luck === 1 ? 'Repetir uma rolagem' : luck === 2 ? 'Adicionar +1 à próxima rolagem' : 'Repetir o dano de um ataque';
+    const next = {
+      ...character,
+      resources: { ...character.resources, luck: 0, pendingLuckBonus: luck === 2 ? 1 : 0 },
+      actionHistory: [{ id: `luck_${Date.now()}`, name: `Sorte ${luck}`, result: label, manaSpent: 0, focusSpent: 0, humanitySpent: 0, createdAt: new Date().toISOString() }, ...(character.actionHistory || [])].slice(0, 100),
+    };
+    onChange(next);
+    if (luck !== 2) requestRoll({ characterId: character.id, type: luck === 3 ? 'damage' : 'luck', name: label, sides: luck === 3 ? 6 : 20, modifiers: [], penalties: 0, origin: 'luck' }, (record) => onChange({ ...next, rollHistory: [record, ...(next.rollHistory || [])].slice(0, 30) }));
+  }
+
+  return <Panel title="Sorte" subtitle="Recurso raro de uso único"><div className="metricGrid"><Metric label="Nível ativo" value={luck} /><Metric label="Bônus pendente" value={character.resources?.pendingLuckBonus || 0} /></div><p className="muted">{luck === 0 ? 'Nenhum efeito de Sorte ativo.' : luck === 1 ? 'Repete uma rolagem; o segundo resultado é obrigatório.' : luck === 2 ? 'Adiciona +1 a uma rolagem antes da confirmação.' : 'Repete o dano de um único ataque; o segundo resultado é obrigatório.'}</p><div className="quickActions"><button className="primaryButton" disabled={!luck} onClick={consume}>Usar Sorte</button><button disabled={!luck} onClick={() => onChange({ ...character, resources: { ...character.resources, luck: 0, pendingLuckBonus: 0 } })}>Encerrar sessão</button></div></Panel>;
 }
 
 function HumanityPanel({ character, classEntry, onChange, requestRoll, recordRoll }) {
@@ -519,10 +600,10 @@ function HumanityPanel({ character, classEntry, onChange, requestRoll, recordRol
     <ResourceControl label="Divindade" current={divinity} max={100} readOnly />
     <div className="humanityStatus"><strong>{status.name}</strong><p>{status.description}</p></div>
     <div className="metricGrid"><Metric label="CD Divina" value={status.difficulty ?? (humanity === 1 ? 'Especial' : '—')} /><Metric label="Resistência" value={`+${resistance}`} /><Metric label="Acerto divino" value={`+${divineAccuracyBonus(character)}`} /></div>
-    {hasFaithDamageBonus(character) && <p className="noticeText">Magias Divinas recebem dano base +{faithDamageBonus(character)} (Fé / 2).</p>}
+    {hasFaithDamageBonus(character) && <p className="noticeText">Magias Divinas recebem +{faithDamageBonus(character)} de dano (5% da Divindade).</p>}
     {!status.playable && <p className="validationError">O personagem está injogável enquanto permanecer com Humanidade 0.</p>}
     <div className="humanityControls"><label>Quantidade<input type="number" min="1" max="100" value={amount} onChange={(event) => setAmount(event.target.value)} /></label><label>Motivo<input value={reason} onChange={(event) => setReason(event.target.value)} /></label></div>
-    <div className="quickActions"><button className="primaryButton" disabled={humanity <= 0} onClick={() => apply(-1)}>Gastar Humanidade</button><button disabled={humanity >= 100} onClick={() => apply(1)}>Restaurar</button><button disabled={status.difficulty === null} onClick={rollResistance}>Resistência Divina</button></div>
+    <div className="quickActions"><button className="primaryButton" disabled={humanity <= 0} onClick={() => apply(-1)}>Gastar Humanidade</button><button disabled={humanity >= 100} onClick={() => apply(1)}>Restaurar</button><button disabled={status.difficulty === null} onClick={rollResistance}>Resistência Divina</button><button disabled={humanity >= 100} onClick={() => onChange(changeHumanity(character, 5, 'Recuperação ao fim do combate'))}>Fim do combate +5</button><button disabled={humanity >= 100} onClick={() => onChange(changeHumanity(character, 10, 'Recuperação após 5 turnos'))}>5 turnos +10</button><button disabled={humanity >= 100} onClick={() => onChange(changeHumanity(character, 100, 'Descanso completo'))}>Descanso completo</button></div>
     {!!character.humanityHistory?.length && <details className="xpHistory"><summary>Histórico de Humanidade</summary>{character.humanityHistory.slice(0, 20).map((entry) => <p key={entry.id}><b>{entry.reason}</b> · Humanidade {entry.humanityBefore} → {entry.humanityAfter} · Divindade {entry.divinityBefore} → {entry.divinityAfter}</p>)}</details>}
   </Panel>;
 }
@@ -553,7 +634,7 @@ function CorruptionPanel({ character, onChange }) {
 
 function RuleCards({ values = [], empty, onUse }) {
   if (!values.length) return <p className="muted">{empty}</p>;
-  return <div className="abilityGrid">{values.map((value) => <article key={value}><span>✦</span><p>{value}</p>{onUse && <button className="ghostButton compactButton" onClick={() => onUse(value)}>Usar</button>}</article>)}</div>;
+  return <div className="abilityGrid">{values.map((value) => <article key={value}><span>✦</span><p>{value}</p>{onUse && <button className="ghostButton compactButton" onClick={() => onUse(value)}>Rolar d20</button>}</article>)}</div>;
 }
 
 function ItemList({ items, catalog, actionLabel, onAction, onQuantity, onRemove }) {
@@ -563,8 +644,38 @@ function ItemList({ items, catalog, actionLabel, onAction, onQuantity, onRemove 
 
 function CatalogItemPicker({ catalog, onAdd }) {
   const [query, setQuery] = useState('');
+  const pickerRef = useRef(null);
   const items = catalogGroups(catalog).items.filter((entry) => normalize(`${entry.name} ${entry.description} ${(entry.labels || []).map((label) => label.name).join(' ')}`).includes(normalize(query)));
-  return <details className="catalogItemPicker"><summary>Adicionar item existente</summary><label>Buscar no catálogo<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, tipo ou etiqueta" /></label><div>{items.length ? items.slice(0, 30).map((entry) => <article key={entry.id}><RpgImage src={entry.imageUrl} alt={entry.name} className="itemImage" fallback="□" /><span><strong>{entry.name}</strong><small>{entry.labels?.map((label) => label.name).filter(Boolean).join(' · ') || entry.category}</small></span><button className="primaryButton compactButton" onClick={() => onAdd(entry)}>Adicionar</button></article>) : <p className="muted">Nenhum item encontrado.</p>}</div></details>;
+  function add(entry) {
+    onAdd(entry);
+    setQuery('');
+    if (pickerRef.current) pickerRef.current.open = false;
+  }
+  return <details ref={pickerRef} className="catalogItemPicker"><summary>Adicionar item existente</summary><label>Buscar no catálogo<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, tipo ou etiqueta" /></label><div>{items.length ? items.slice(0, 30).map((entry) => <article key={entry.id}><RpgImage src={entry.imageUrl} alt={entry.name} className="itemImage" fallback="□" /><span><strong>{entry.name}</strong><small>{entry.labels?.map((label) => label.name).filter(Boolean).join(' · ') || entry.category}</small></span><button className="primaryButton compactButton" onClick={() => add(entry)}>Adicionar</button></article>) : <p className="muted">Nenhum item encontrado.</p>}</div></details>;
+}
+
+function CustomItemCreator({ onCreate }) {
+  const empty = { name: '', type: 'Item', description: '', imageUrl: '', weight: 0, quantity: 1, bonusTarget: '', bonusValue: 1, equip: false };
+  const [draft, setDraft] = useState(empty);
+  const bonusOptions = [
+    ['', 'Sem bônus'], ['defense', 'Defesa'], ['armorClass', 'CA'],
+    ['strength', 'Força'], ['dexterity', 'Destreza'], ['constitution', 'Constituição'],
+    ['intelligence', 'Inteligência'], ['charisma', 'Carisma'], ['faith', 'Fé'],
+  ];
+  const selected = bonusOptions.find(([id]) => id === draft.bonusTarget);
+
+  function submit(event) {
+    event.preventDefault();
+    if (!draft.name.trim()) return;
+    const bonusValue = Math.max(-20, Math.min(20, Number(draft.bonusValue) || 0));
+    onCreate({
+      ...draft,
+      bonus: selected?.[0] && bonusValue !== 0 ? `${selected[1]}: ${bonusValue >= 0 ? '+' : ''}${bonusValue}` : '',
+    });
+    setDraft(empty);
+  }
+
+  return <details className="customItemCreator"><summary><Plus aria-hidden="true" /> Criar item personalizado</summary><form onSubmit={submit}><div className="customItemGrid"><label>Nome<input maxLength="120" required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label>Tipo<select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })}><option>Item</option><option>Arma</option><option>Armadura</option><option>Consumível</option><option>Ferramenta</option><option>Acessório</option></select></label><label>Quantidade<input type="number" min="1" max="9999" value={draft.quantity} onChange={(event) => setDraft({ ...draft, quantity: event.target.value })} /></label><label>Peso<input type="number" min="0" step="0.1" value={draft.weight} onChange={(event) => setDraft({ ...draft, weight: event.target.value })} /></label><label>Bônus ao equipar<select value={draft.bonusTarget} onChange={(event) => setDraft({ ...draft, bonusTarget: event.target.value })}>{bonusOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><label>Valor do bônus<input type="number" min="-20" max="20" disabled={!draft.bonusTarget} value={draft.bonusValue} onChange={(event) => setDraft({ ...draft, bonusValue: event.target.value })} /></label><label className="spanTwoFields">URL da imagem<input type="url" maxLength="2000" placeholder="https://..." value={draft.imageUrl} onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })} /></label><label className="spanTwoFields">Descrição<textarea rows="3" maxLength="2000" value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label></div><div className="customItemFooter"><label className="inlineCheck"><input type="checkbox" checked={draft.equip} onChange={(event) => setDraft({ ...draft, equip: event.target.checked })} /> Criar já equipado</label><button type="submit" className="primaryButton"><Plus aria-hidden="true" /> Criar item</button></div></form></details>;
 }
 
 function RollHistory({ values }) {
@@ -577,89 +688,85 @@ function LevelHistory({ values }) {
   return <div className="historyList">{values.map((entry, index) => <article key={`${entry.level}_${entry.createdAt}_${index}`}><strong>{entry.level}</strong><div><b>Nível {entry.level} · +{entry.hpAdded} vida</b><span>{entry.rollResult !== null && entry.rollResult !== undefined ? `${entry.die}: ${entry.rollResult}` : entry.hpMethod?.startsWith('initial_') ? `HP inicial · método ${entry.hpMethod.replace('initial_', '')}` : 'Valor fixo'} · XP consumido: {entry.xpSpent || 0} · Habilidade +{entry.skillPoints || 0} · Classe +{entry.classPoints || 0}</span>{entry.abilities?.length > 0 && <span>Habilidades: {entry.abilities.join(', ')}</span>}<time>{new Date(entry.createdAt).toLocaleString('pt-BR')}</time></div></article>)}</div>;
 }
 
+function ClassProgressPanel({ character, onRegister, onLevelUp }) {
+  const balance = Number(character.classXp || 0);
+  const cost = classXpRequired(character.level);
+  const atLimit = character.level >= 10;
+  const ready = !atLimit && balance >= cost;
+  return <Panel title="XP de classe" subtitle="Usado para subir de nível" wide>
+    <div className="classProgress">
+      <div className="classProgressBalance"><span>Saldo disponível</span><strong>{balance} XP</strong><small>{atLimit ? 'Nível máximo · XP de Excelência' : ready ? `Nível ${character.level + 1} disponível · custa ${cost} XP` : `Faltam ${cost - balance} XP para o nível ${character.level + 1}`}</small></div>
+      {!atLimit && <progress max={cost} value={Math.min(cost, balance)} aria-label="Progresso para o próximo nível" />}
+      <div className="classProgressActions"><button className="ghostButton" onClick={onRegister}>Registrar XP de sessão</button>{!atLimit && <button className="primaryButton" disabled={!ready} onClick={onLevelUp}>Subir para nível {character.level + 1}</button>}</div>
+    </div>
+  </Panel>;
+}
+
 function ExperiencePanel({ character, catalog, classEntry, onChange }) {
   const skills = catalogGroups(catalog).skills;
-  const suggestedAreas = unique(['Investigação', 'Coleta', 'Medicina', 'Religião', 'Furtividade', 'Diplomacia', 'Sobrevivência', ...skills.map((entry) => entry.name)]);
-  const [area, setArea] = useState(suggestedAreas[0] || 'Investigação');
-  const [areaGain, setAreaGain] = useState(1);
-  const [combatBase, setCombatBase] = useState(1);
-  const [combatExtra, setCombatExtra] = useState(1);
-  const [areaAttribute, setAreaAttribute] = useState('');
-  const [combatAttribute, setCombatAttribute] = useState('');
-  const areaBalance = Number(character.areaExperience?.[area] || 0);
-  const matchingSkill = skills.find((entry) => normalize(entry.name) === normalize(area));
-  const relatedAttributes = matchingSkill
-    ? parseSkill(matchingSkill).terms.map((term) => term.attribute)
-    : attributes.map(([id]) => id);
-  const combatTargets = allowedCombatXpTargets(classEntry);
+  const [gain, setGain] = useState(1);
+  const [scene, setScene] = useState('Participação relevante');
+  const [attribute, setAttribute] = useState(attributes[0][0]);
+  const [skillId, setSkillId] = useState(skills[0]?.id || '');
+  const developmentXp = Number(character.developmentXp || 0);
+  const developmentPoints = Number(character.developmentPoints || 0);
+  const attributeValue = attributeBreakdown(character, attribute).total;
+  const attributeCost = attributePointCost(attributeValue);
+  const skillDevelopment = Number(character.developmentSkillBonuses?.[skillId] || 0);
 
   function history(type, amount, description) {
     return { id: `xp_${Date.now()}_${Math.random().toString(16).slice(2)}`, type, amount, description, createdAt: new Date().toISOString() };
   }
 
-  function grantAreaXp() {
-    const amount = Math.min(4, Math.max(1, Number(areaGain) || 1));
+  function grantDevelopmentXp() {
+    const amount = Math.min(4, Math.max(1, Number(gain) || 1));
+    const total = developmentXp + amount;
+    const earnedPoints = Math.floor(total / 20);
     onChange({
-      areaExperience: { ...character.areaExperience, [area]: areaBalance + amount },
-      experienceHistory: [history('area', amount, `${area}: XP por cena`), ...(character.experienceHistory || [])],
+      developmentXp: total % 20,
+      developmentPoints: developmentPoints + earnedPoints,
+      experienceHistory: [...(earnedPoints > 0 ? [history('conversion', -(earnedPoints * 20), `${earnedPoints * 20} XP convertidos automaticamente em ${earnedPoints} PD`)] : []), history('development', amount, scene || 'Cena relevante'), ...(character.experienceHistory || [])],
     });
   }
 
-  function grantCombatXp() {
-    const amount = Math.min(8, Math.max(0, Number(combatBase) || 0) + Math.max(0, Number(combatExtra) || 0));
-    if (!amount) return;
-    onChange({ combatXp: Number(character.combatXp || 0) + amount, experienceHistory: [history('combat', amount, `Combate: base ${combatBase} + participação ${combatExtra}`), ...(character.experienceHistory || [])] });
-  }
-
-  function convertAreaToSkill() {
-    if (!matchingSkill || areaBalance < 20) return;
+  function improveAttribute() {
+    if (developmentPoints < attributeCost || attributeValue >= 20) return;
+    if (!window.confirm(`Gastar ${attributeCost} PD para +1 em ${attributeLabel(attribute)}?`)) return;
     onChange({
-      areaExperience: { ...character.areaExperience, [area]: areaBalance - 20 },
-      skillBonuses: { ...character.skillBonuses, [matchingSkill.id]: Number(character.skillBonuses?.[matchingSkill.id] || 0) + 1 },
-      experienceHistory: [history('conversion', -20, `${area}: +1 permanente na perícia`), ...(character.experienceHistory || [])],
+      developmentPoints: developmentPoints - attributeCost,
+      permanentAttributeBonuses: { ...character.permanentAttributeBonuses, [attribute]: Number(character.permanentAttributeBonuses?.[attribute] || 0) + 1 },
+      developmentAttributeBonuses: { ...character.developmentAttributeBonuses, [attribute]: Number(character.developmentAttributeBonuses?.[attribute] || 0) + 1 },
+      experienceHistory: [history('development_spend', -attributeCost, `+1 permanente em ${attributeLabel(attribute)}`), ...(character.experienceHistory || [])],
     });
   }
 
-  function convertAreaToAttribute() {
-    const target = areaAttribute || relatedAttributes[0];
-    if (!target || areaBalance < 20) return;
-    if (!window.confirm(`Confirmar aprovação do mestre para +1 em ${attributeLabel(target)}?`)) return;
-    const current = attributeBreakdown(character, target).total;
-    if (current >= 20) return;
+  function improveSkill() {
+    if (!skillId || developmentPoints < 1 || skillDevelopment >= 5) return;
+    const skill = skills.find((entry) => entry.id === skillId);
     onChange({
-      areaExperience: { ...character.areaExperience, [area]: areaBalance - 20 },
-      permanentAttributeBonuses: { ...character.permanentAttributeBonuses, [target]: Number(character.permanentAttributeBonuses?.[target] || 0) + 1 },
-      experienceHistory: [history('conversion', -20, `${area}: +1 permanente em ${attributeLabel(target)}`), ...(character.experienceHistory || [])],
+      developmentPoints: developmentPoints - 1,
+      skillBonuses: { ...character.skillBonuses, [skillId]: Number(character.skillBonuses?.[skillId] || 0) + 1 },
+      developmentSkillBonuses: { ...character.developmentSkillBonuses, [skillId]: skillDevelopment + 1 },
+      experienceHistory: [history('development_spend', -1, `+1 permanente em ${skill?.name || 'perícia'}`), ...(character.experienceHistory || [])],
     });
   }
 
-  function convertCombat() {
-    const target = combatAttribute || combatTargets[0];
-    if (!target || Number(character.combatXp || 0) < 25) return;
-    if (!window.confirm(`Confirmar que ${attributeLabel(target)} é permitido pela classe e coerente com o combate?`)) return;
-    if (attributeBreakdown(character, target).total >= 20) return;
-    onChange({
-      combatXp: character.combatXp - 25,
-      permanentAttributeBonuses: { ...character.permanentAttributeBonuses, [target]: Number(character.permanentAttributeBonuses?.[target] || 0) + 1 },
-      experienceHistory: [history('conversion', -25, `Combate: +1 permanente em ${attributeLabel(target)}`), ...(character.experienceHistory || [])],
-    });
-  }
-
-  return <Panel title="Experiência" subtitle="Áreas, combate e conversões" wide>
+  return <Panel title="XP de desenvolvimento" subtitle="A cada 20 XP, recebe 1 PD automaticamente" wide>
     <div className="xpColumns">
-      <section className="xpBlock"><h4>XP por área</h4><label>Área<select aria-label="Área de experiência" value={area} onChange={(event) => { setArea(event.target.value); setAreaAttribute(''); }}>{suggestedAreas.map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label>XP da cena (1–4)<input type="number" min="1" max="4" value={areaGain} onChange={(event) => setAreaGain(event.target.value)} /></label><button className="primaryButton" onClick={grantAreaXp}>Registrar XP</button><div className="xpBalance"><span>{area}</span><strong>{areaBalance}/20 XP</strong></div>{matchingSkill && <button className="ghostButton" disabled={areaBalance < 20} onClick={convertAreaToSkill}>Converter em +1 na perícia</button>}{relatedAttributes.length > 0 && <div className="conversionRow"><select value={areaAttribute || relatedAttributes[0]} onChange={(event) => setAreaAttribute(event.target.value)}>{relatedAttributes.map((id) => <option value={id} key={id}>{attributeLabel(id)}</option>)}</select><button className="ghostButton" disabled={areaBalance < 20} onClick={convertAreaToAttribute}>+1 atributo</button></div>}</section>
-      <section className="xpBlock"><h4>XP de combate</h4><label>Dificuldade<select value={combatBase} onChange={(event) => setCombatBase(Number(event.target.value))}><option value="0">Não participou · 0</option><option value="1">Fácil · 1</option><option value="2">Moderado · 2</option><option value="3">Difícil · 3</option><option value="4">Mortal · 4</option></select></label><label>Participação<select value={combatExtra} onChange={(event) => setCombatExtra(Number(event.target.value))}><option value="0">Sem adicional · 0</option><option value="1">Pouca · 1</option><option value="2">Moderada · 2</option><option value="3">Bastante · 3</option><option value="4">Carregou · 4</option></select></label><button className="primaryButton" onClick={grantCombatXp}>Registrar {Math.min(8, Number(combatBase) + Number(combatExtra))} XP</button><div className="xpBalance"><span>Combate</span><strong>{character.combatXp || 0}/25 XP</strong></div>{combatTargets.length ? <div className="conversionRow"><select value={combatAttribute || combatTargets[0]} onChange={(event) => setCombatAttribute(event.target.value)}>{combatTargets.map((id) => <option value={id} key={id}>{attributeLabel(id)}</option>)}</select><button className="ghostButton" disabled={character.combatXp < 25} onClick={convertCombat}>Converter +1</button></div> : <p className="validationWarning">O arquivo não lista os atributos de combate permitidos para esta classe. A conversão permanece bloqueada.</p>}</section>
+      <section className="xpBlock"><div className="xpBalance"><span>Saldo de desenvolvimento</span><strong>{developmentXp}/20 XP · {developmentPoints} PD</strong></div><h4>Registrar cena</h4><label>Contribuição<select value={gain} onChange={(event) => setGain(Number(event.target.value))}><option value="1">Participação relevante · 1 XP</option><option value="2">Boa contribuição · 2 XP</option><option value="3">Grande contribuição · 3 XP</option><option value="4">Feito excepcional · 4 XP</option></select></label><label>Contexto<input value={scene} onChange={(event) => setScene(event.target.value)} /></label><button className="primaryButton" onClick={grantDevelopmentXp}>Registrar {gain} XP de desenvolvimento</button></section>
+      <section className="xpBlock"><h4>Gastar PD</h4><label>Atributo<select value={attribute} onChange={(event) => setAttribute(event.target.value)}>{attributes.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><button className="ghostButton" disabled={developmentPoints < attributeCost || attributeValue >= 20} onClick={improveAttribute}>+1 atributo · {attributeCost} PD</button><label>Perícia<select value={skillId} onChange={(event) => setSkillId(event.target.value)}>{skills.map((entry) => <option value={entry.id} key={entry.id}>{entry.name}</option>)}</select></label><button className="ghostButton" disabled={!skillId || developmentPoints < 1 || skillDevelopment >= 5} onClick={improveSkill}>+1 perícia · 1 PD ({skillDevelopment}/5)</button></section>
     </div>
     <details className="xpHistory"><summary>Histórico de XP</summary>{!(character.experienceHistory || []).length ? <p className="muted">Nenhum XP registrado.</p> : <div className="historyList">{character.experienceHistory.map((entry) => <article key={entry.id}><strong>{entry.amount > 0 ? `+${entry.amount}` : entry.amount}</strong><div><b>{entry.description}</b><time>{new Date(entry.createdAt).toLocaleString('pt-BR')}</time></div></article>)}</div>}</details>
   </Panel>;
 }
 
-function LevelUpDialog({ character, catalog, parsedClass, onCancel, onConfirm }) {
+function LevelUpDialog({ mode, character, catalog, parsedClass, onCancel, onConfirm }) {
   const method = character.hpProgressionMode === 'base' ? 'fixed' : (character.hpProgressionMode || 'fixed');
   const [rawRoll, setRawRoll] = useState('');
-  const [xpGain, setXpGain] = useState(1);
-  const [xpNote, setXpNote] = useState('Participação na sessão +1');
-  const [xpBreakdown, setXpBreakdown] = useState({ participation: 1 });
+  const [xpGain, setXpGain] = useState(0);
+  const [xpNote, setXpNote] = useState('');
+  const [xpBreakdown, setXpBreakdown] = useState({});
+  const [entryMode, setEntryMode] = useState('criteria');
   if (!parsedClass) return null;
   const nextLevel = character.level + 1;
   const nextCharacter = recalculateCharacter({ ...character, level: nextLevel }, catalog);
@@ -669,14 +776,14 @@ function LevelUpDialog({ character, catalog, parsedClass, onCancel, onConfirm })
   const parsedRoll = Number(rawRoll);
   const hp = method === 'fixed' ? formulaValue : rawRoll !== '' && parsedRoll >= 1 && parsedRoll <= Number(die || 0) ? Number(formulaValue || 0) + parsedRoll : null;
   const xpCost = classXpRequired(character.level);
-  const availableXp = Number(character.classXp || 0) + Math.max(0, Number(xpGain) || 0);
+  const availableXp = Number(character.classXp || 0);
   const unlocks = parsedClass.unlocks.filter((item) => item.level === nextLevel).map((item) => item.name);
 
   function withRegisteredXp() {
     const gain = Math.max(0, Number(xpGain) || 0);
     if (!gain) return character;
     const calculated = calculateClassSessionXp(xpBreakdown);
-    const entry = { id: `class_xp_${Date.now()}`, amount: gain, note: xpNote.trim() || 'Sessão', breakdown: calculated.total === gain ? calculated.breakdown : {}, createdAt: new Date().toISOString() };
+    const entry = { id: `class_xp_${Date.now()}`, amount: gain, note: xpNote.trim() || 'Sessão', breakdown: entryMode === 'criteria' ? calculated.breakdown : {}, createdAt: new Date().toISOString() };
     return { ...character, classXp: Number(character.classXp || 0) + gain, classXpTotal: Number(character.classXpTotal || 0) + gain, classXpHistory: [entry, ...(character.classXpHistory || [])] };
   }
 
@@ -685,8 +792,7 @@ function LevelUpDialog({ character, catalog, parsedClass, onCancel, onConfirm })
   }
 
   function confirm() {
-    const baseCharacter = withRegisteredXp();
-    if (hp === null || Number(baseCharacter.classXp || 0) < xpCost || character.level >= 10) return;
+    if (hp === null || availableXp < xpCost || character.level >= 10) return;
     const record = {
       level: nextLevel, hpMethod: method, die: method === 'fixed' ? '' : `d${die}`,
       rollResult: method === 'fixed' ? null : parsedRoll, modifiers: method === 'fixed' ? Math.max(0, hp - Number(parsedClass.hpPerLevelBase || 0)) : Number(formulaValue || 0),
@@ -694,7 +800,7 @@ function LevelUpDialog({ character, catalog, parsedClass, onCancel, onConfirm })
       abilities: unlocks, proficiencies: [], xpSpent: xpCost, createdAt: new Date().toISOString(),
     };
     onConfirm({
-      ...baseCharacter, classXp: baseCharacter.classXp - xpCost, level: nextLevel,
+      ...character, classXp: availableXp - xpCost, level: nextLevel,
       maxHp: character.maxHp + hp, currentHp: character.currentHp + hp,
       skillPoints: (character.skillPoints || 0) + (parsedClass.skillPointsPerLevel || 0),
       classPoints: (character.classPoints || 0) + (parsedClass.classPointsPerLevel || 0),
@@ -703,19 +809,28 @@ function LevelUpDialog({ character, catalog, parsedClass, onCancel, onConfirm })
   }
 
   return <div className="modalBackdrop"><section className="modal levelModal">
-    <div className="panelHeader"><div><span className="eyebrow">XP de Classe</span><h2>{character.level >= 10 ? 'Progresso de Excelência' : `Nível ${character.level} → ${nextLevel}`}</h2></div><button className="iconButton" aria-label="Fechar" title="Fechar" onClick={onCancel}><X aria-hidden="true" /></button></div>
-    <ClassXpCalculator values={xpBreakdown} onChange={(values) => { const calculated = calculateClassSessionXp(values); setXpBreakdown(values); setXpGain(calculated.total); setXpNote(calculated.summary || 'Sessão'); }} />
-    <div className="xpEntry"><label>XP ganho<input type="number" min="0" value={xpGain} onChange={(event) => setXpGain(event.target.value)} /></label><label>Origem / sessão<input value={xpNote} onChange={(event) => setXpNote(event.target.value)} /></label></div>
-    <div className="xpBalance"><span>{character.level >= 10 ? 'Excelência' : `Próximo nível (${xpCost} XP)`}</span><strong>{availableXp}/{xpCost} XP</strong></div>
-    {character.level < 10 && <><div className="methodSummary"><span>Método de vida</span><strong>{method === 'fixed' ? 'Valor fixo' : method === 'roll' ? `Rolagem d${die}` : `Híbrido + d${die}`}</strong></div>{method !== 'fixed' && <label>Resultado bruto do d{die}<input type="number" min="1" max={die} value={rawRoll} onChange={(event) => setRawRoll(event.target.value)} /></label>}<div className="summaryList"><span>XP consumido <b>{xpCost}</b></span><span>Atributos do novo nível <b>aplicados antes da vida</b></span><span>Base e modificadores de vida <b>{formulaValue ?? 'indisponível'}</b></span><span>Vida adicionada <b>{hp ?? 'informe um resultado válido'}</b></span><span>Habilidades <b>{unlocks.join(', ') || 'nenhuma identificada'}</b></span></div></>}
+    <div className="panelHeader"><div><span className="eyebrow">XP de Classe</span><h2>{mode === 'register' ? 'Registrar XP de sessão' : `Subir para nível ${nextLevel}`}</h2></div><button className="iconButton" aria-label="Fechar" title="Fechar" onClick={onCancel}><X aria-hidden="true" /></button></div>
+    {mode === 'register' ? <>
+      <div className="segmented" role="group" aria-label="Forma de registrar XP"><button className={entryMode === 'criteria' ? 'active' : ''} onClick={() => { setEntryMode('criteria'); setXpGain(calculateClassSessionXp(xpBreakdown).total); }}>Por critérios</button><button className={entryMode === 'manual' ? 'active' : ''} onClick={() => { setEntryMode('manual'); setXpGain(0); }}>Total manual</button></div>
+      {entryMode === 'criteria' ? <ClassXpCalculator values={xpBreakdown} onChange={(values) => { const calculated = calculateClassSessionXp(values); setXpBreakdown(values); setXpGain(calculated.total); }} /> : <label>XP ganho<input type="number" min="0" value={xpGain} onChange={(event) => setXpGain(event.target.value)} /></label>}
+      <label>Origem / sessão<input value={xpNote} onChange={(event) => setXpNote(event.target.value)} placeholder="Ex.: sessão de hoje" /></label>
+      <div className="xpBalance"><span>Após registrar</span><strong>{availableXp} + {Math.max(0, Number(xpGain) || 0)} = {availableXp + Math.max(0, Number(xpGain) || 0)} XP</strong></div>
+      {character.level < 10 && <p className="xpHint">{availableXp + Math.max(0, Number(xpGain) || 0) >= xpCost ? `XP suficiente para subir ao nível ${nextLevel}.` : `Faltarão ${xpCost - availableXp - Math.max(0, Number(xpGain) || 0)} XP para o próximo nível.`}</p>}
+    </> : <>
+      <div className="xpBalance"><span>Saldo de XP de classe</span><strong>{availableXp} XP</strong></div>
+      <div className="methodSummary"><span>Custo do nível {nextLevel}</span><strong>{xpCost} XP · restam {Math.max(0, availableXp - xpCost)} XP</strong></div>
+      <div className="methodSummary"><span>Método de vida</span><strong>{method === 'fixed' ? 'Valor fixo' : method === 'roll' ? `Rolagem d${die}` : `Híbrido + d${die}`}</strong></div>
+      {method !== 'fixed' && <label>Resultado bruto do d{die}<input type="number" min="1" max={die} value={rawRoll} onChange={(event) => setRawRoll(event.target.value)} /></label>}
+      <div className="summaryList"><span>Atributos do novo nível <b>aplicados antes da vida</b></span><span>Base e modificadores de vida <b>{formulaValue ?? 'indisponível'}</b></span><span>Vida adicionada <b>{hp ?? 'informe um resultado válido'}</b></span><span>Habilidades <b>{unlocks.join(', ') || 'nenhuma identificada'}</b></span></div>
+    </>}
     <details className="xpHistory"><summary>Histórico de XP de Classe</summary>{!(character.classXpHistory || []).length ? <p className="muted">Nenhum XP de Classe registrado.</p> : character.classXpHistory.map((entry) => <p key={entry.id}>+{entry.amount} XP · {entry.note} · {new Date(entry.createdAt).toLocaleString('pt-BR')}</p>)}</details>
-    <div className="modalActions"><button className="ghostButton" onClick={onCancel}>Cancelar</button><button className="ghostButton" disabled={Number(xpGain) <= 0} onClick={registerOnly}>Apenas registrar XP</button>{character.level < 10 && <button className="primaryButton" disabled={availableXp < xpCost || hp === null} onClick={confirm}>Consumir XP e subir</button>}</div>
+    <div className="modalActions"><button className="ghostButton" onClick={onCancel}>Cancelar</button>{mode === 'register' ? <button className="primaryButton" disabled={Number(xpGain) <= 0} onClick={registerOnly}>Registrar {Number(xpGain) || 0} XP</button> : <button className="primaryButton" disabled={availableXp < xpCost || hp === null} onClick={confirm}>Confirmar nível {nextLevel}</button>}</div>
   </section></div>;
 }
 
 function ClassXpCalculator({ values, onChange }) {
   const calculated = calculateClassSessionXp(values);
-  return <details className="classXpCalculator" open>
+  return <details className="classXpCalculator">
     <summary>Critérios da sessão <strong>{calculated.total} XP</strong></summary>
     <div className="classXpCriteria">{classXpCriteria.map(([id, label, options]) => <label key={id}>{label}<select value={values[id] || 0} onChange={(event) => onChange({ ...values, [id]: Number(event.target.value) })}>{options.map((value) => <option key={value} value={value}>{value === 0 ? 'Não conceder' : `+${value} XP`}</option>)}</select></label>)}</div>
   </details>;
@@ -757,7 +872,16 @@ function LegacyLevelUpDialog({ character, parsedClass, onCancel, requestRoll, on
 }
 
 function ExportDialog({ character, onClose }) {
-  return <div className="modalBackdrop"><section className="modal exportModal"><div className="panelHeader"><div><span className="eyebrow">Exportação</span><h2>Prévia JSON da ficha</h2></div><button className="iconButton" aria-label="Fechar" title="Fechar" onClick={onClose}><X aria-hidden="true" /></button></div><pre>{JSON.stringify(character, null, 2)}</pre><p className="muted">A arquitetura está preparada para PDF e imagem em uma próxima etapa.</p></section></div>;
+  function download() {
+    const blob = new Blob([JSON.stringify(character, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${(character.name || 'personagem').replace(/[^a-z0-9_-]+/gi, '_')}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  return <div className="modalBackdrop"><section className="modal exportModal" role="dialog" aria-modal="true" aria-label="Exportar ficha"><div className="panelHeader"><div><span className="eyebrow">Exportação</span><h2>Ficha em JSON</h2></div><button className="iconButton" aria-label="Fechar" title="Fechar" onClick={onClose}><X aria-hidden="true" /></button></div><pre>{JSON.stringify(character, null, 2)}</pre><div className="modalActions"><button className="ghostButton" onClick={onClose}>Cancelar</button><button className="primaryButton" onClick={download}><Download aria-hidden="true" />Baixar JSON</button></div></section></div>;
 }
 
 function inferProficiencyCategory(value) {

@@ -6,7 +6,7 @@
 
 O Runalith RPG é uma plataforma completa para criação e gerenciamento de personagens. O projeto reúne um aplicativo Flutter, uma aplicação web em Next.js e uma API Node.js conectada ao PostgreSQL do Supabase.
 
-As regras oficiais de classes, raças, atributos, perícias, progressão e combate têm como fonte o arquivo [`RPG SISTEMA.docx`](RPG%20SISTEMA.docx). O catálogo estruturado no banco distribui as mesmas regras para web e mobile.
+As regras oficiais de classes, raças, atributos, perícias, progressão e combate têm como fonte o arquivo [`RPG SISTEMA V0.3.docx`](RPG%20SISTEMA%20V0.3.docx). O catálogo estruturado no banco distribui as mesmas regras para web e mobile.
 
 ## Recursos
 
@@ -14,7 +14,7 @@ As regras oficiais de classes, raças, atributos, perícias, progressão e comba
 - Fichas públicas ou privadas; outros jogadores veem apenas o resumo permitido.
 - Classes, raças, variantes, atributos, perícias e proficiências estruturadas, incluindo a versatilidade e a conexão dos Elfos.
 - Técnicas de Combate Geral com treinamento fora de combate, uso único e recarga por turnos.
-- Progressão por nível, XP geral, XP por atributo e XP por área.
+- Progressão de XP de Classe por nível e XP de Desenvolvimento unificado, convertido em Pontos de Desenvolvimento.
 - Controle de HP, mana, foco, Humanidade, Corrupção e testes contra a morte.
 - Métodos de vida fixo, rolado e híbrido, com resultados por nível.
 - Inventário oficial, moedas, equipamentos e modificadores de Defesa/CA.
@@ -33,7 +33,7 @@ As regras oficiais de classes, raças, atributos, perícias, progressão e comba
 | [`rpg_web`](rpg_web) | Next.js, React e Three.js | Aplicação web e Dice Roller 3D |
 | [`rpg_sheet_app`](rpg_sheet_app) | Flutter e Dart | Aplicativo mobile com cache local |
 | [`supabase`](supabase) | SQL | Migrações versionadas, RLS e estrutura do banco |
-| [`RPG SISTEMA.docx`](RPG%20SISTEMA.docx) | Documento | Fonte oficial das regras do sistema |
+| [`RPG SISTEMA V0.3.docx`](RPG%20SISTEMA%20V0.3.docx) | Documento | Fonte oficial das regras do sistema |
 
 O web e o mobile acessam somente a API. A URL e as credenciais do PostgreSQL nunca devem ser incluídas nos clientes.
 

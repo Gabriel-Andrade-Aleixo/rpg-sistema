@@ -12,12 +12,15 @@ test('prepara fichas grandes para persistir em JSONB no Postgres', () => {
     modifiers: Array.from({ length: 300 }, (_, index) => ({ id: index, description: 'Regra calculada '.repeat(10) })),
     rollHistory: Array.from({ length: 100 }, (_, index) => ({ id: index, modifiers: Array(20).fill({ sourceName: 'Teste' }) })),
     actionHistory: Array.from({ length: 100 }, (_, index) => ({ id: index, result: 'Resultado '.repeat(20) })),
+    classXpHistory: Array.from({ length: 240 }, (_, index) => ({ id: index, amount: 1 })),
     inventory: [],
     equipment: [],
   };
   const compact = prepareCharacterForStorage(character);
   assert.equal(compact.modifiers, undefined);
   assert.ok(compact.rollHistory.length <= 100);
+  assert.equal(compact.actionHistory.length, 100);
+  assert.equal(compact.classXpHistory.length, 240);
   assert.ok(compact.lore.length <= 12000);
 });
 

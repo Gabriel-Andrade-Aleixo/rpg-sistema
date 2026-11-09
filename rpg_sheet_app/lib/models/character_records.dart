@@ -346,6 +346,7 @@ class CharacterSpell {
     this.imageUrl = '',
     this.actionType = '',
     this.actionId = '',
+    this.degree = 0,
   });
 
   final String id;
@@ -363,6 +364,7 @@ class CharacterSpell {
   final String imageUrl;
   final String actionType;
   final String actionId;
+  final int degree;
   final DateTime createdAt;
 
   bool get mastered => successfulUses >= 3;
@@ -383,6 +385,7 @@ class CharacterSpell {
     'imageUrl': imageUrl,
     'actionType': actionType,
     'actionId': actionId,
+    'degree': degree,
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -403,6 +406,10 @@ class CharacterSpell {
     imageUrl: json['imageUrl']?.toString() ?? '',
     actionType: json['actionType']?.toString() ?? '',
     actionId: json['actionId']?.toString() ?? '',
+    degree:
+        (json['degree'] as num?)?.toInt() ??
+        (json['level'] as num?)?.toInt() ??
+        0,
     createdAt:
         DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
         DateTime.now(),
@@ -425,6 +432,7 @@ class CharacterSpell {
         imageUrl: imageUrl,
         actionType: actionType,
         actionId: actionId,
+        degree: degree,
         createdAt: createdAt,
       );
 }
@@ -441,6 +449,13 @@ class CombatTechnique {
     this.cooldownTurns = 0,
     this.cooldownRemaining = 0,
     this.usedThisCombat = false,
+    this.learningDifficulty = 15,
+    this.executionDifficulty = 10,
+    this.trainingSuccesses = 0,
+    this.executionSuccesses = 0,
+    this.masteryTrainingSuccesses = 0,
+    this.trainingHours = 0,
+    this.learningState = 'unlearned',
   });
 
   final String id;
@@ -452,6 +467,13 @@ class CombatTechnique {
   final int cooldownTurns;
   final int cooldownRemaining;
   final bool usedThisCombat;
+  final int learningDifficulty;
+  final int executionDifficulty;
+  final int trainingSuccesses;
+  final int executionSuccesses;
+  final int masteryTrainingSuccesses;
+  final int trainingHours;
+  final String learningState;
   final DateTime createdAt;
 
   Map<String, dynamic> toJson() => {
@@ -464,6 +486,13 @@ class CombatTechnique {
     'cooldownTurns': cooldownTurns,
     'cooldownRemaining': cooldownRemaining,
     'usedThisCombat': usedThisCombat,
+    'learningDifficulty': learningDifficulty,
+    'executionDifficulty': executionDifficulty,
+    'trainingSuccesses': trainingSuccesses,
+    'executionSuccesses': executionSuccesses,
+    'masteryTrainingSuccesses': masteryTrainingSuccesses,
+    'trainingHours': trainingHours,
+    'learningState': learningState,
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -485,6 +514,22 @@ class CombatTechnique {
         cooldownTurns: (json['cooldownTurns'] as num?)?.toInt() ?? 0,
         cooldownRemaining: (json['cooldownRemaining'] as num?)?.toInt() ?? 0,
         usedThisCombat: json['usedThisCombat'] == true,
+        learningDifficulty: (json['learningDifficulty'] as num?)?.toInt() ?? 15,
+        executionDifficulty:
+            (json['executionDifficulty'] as num?)?.toInt() ?? 10,
+        trainingSuccesses: (json['trainingSuccesses'] as num?)?.toInt() ?? 0,
+        executionSuccesses: (json['executionSuccesses'] as num?)?.toInt() ?? 0,
+        masteryTrainingSuccesses:
+            (json['masteryTrainingSuccesses'] as num?)?.toInt() ?? 0,
+        trainingHours: (json['trainingHours'] as num?)?.toInt() ?? 0,
+        learningState:
+            const [
+              'unlearned',
+              'partial',
+              'mastered',
+            ].contains(json['learningState']?.toString())
+            ? json['learningState'].toString()
+            : 'unlearned',
         createdAt:
             DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
             DateTime.now(),
@@ -499,6 +544,13 @@ class CombatTechnique {
     int? cooldownTurns,
     int? cooldownRemaining,
     bool? usedThisCombat,
+    int? learningDifficulty,
+    int? executionDifficulty,
+    int? trainingSuccesses,
+    int? executionSuccesses,
+    int? masteryTrainingSuccesses,
+    int? trainingHours,
+    String? learningState,
   }) => CombatTechnique(
     id: id,
     name: name ?? this.name,
@@ -509,6 +561,14 @@ class CombatTechnique {
     cooldownTurns: cooldownTurns ?? this.cooldownTurns,
     cooldownRemaining: cooldownRemaining ?? this.cooldownRemaining,
     usedThisCombat: usedThisCombat ?? this.usedThisCombat,
+    learningDifficulty: learningDifficulty ?? this.learningDifficulty,
+    executionDifficulty: executionDifficulty ?? this.executionDifficulty,
+    trainingSuccesses: trainingSuccesses ?? this.trainingSuccesses,
+    executionSuccesses: executionSuccesses ?? this.executionSuccesses,
+    masteryTrainingSuccesses:
+        masteryTrainingSuccesses ?? this.masteryTrainingSuccesses,
+    trainingHours: trainingHours ?? this.trainingHours,
+    learningState: learningState ?? this.learningState,
     createdAt: createdAt,
   );
 }

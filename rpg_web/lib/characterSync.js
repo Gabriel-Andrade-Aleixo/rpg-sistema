@@ -4,11 +4,6 @@ export function compactCharacter(character) {
   const compact = structuredClone(character);
   delete compact.modifiers;
   compact.rollHistory = (compact.rollHistory || []).slice(0, 30);
-  compact.experienceHistory = (compact.experienceHistory || []).slice(0, 20);
-  compact.classXpHistory = (compact.classXpHistory || []).slice(0, 20);
-  compact.humanityHistory = (compact.humanityHistory || []).slice(0, 20);
-  compact.corruptionHistory = (compact.corruptionHistory || []).slice(0, 20);
-  compact.actionHistory = (compact.actionHistory || []).slice(0, 30);
   return compact;
 }
 

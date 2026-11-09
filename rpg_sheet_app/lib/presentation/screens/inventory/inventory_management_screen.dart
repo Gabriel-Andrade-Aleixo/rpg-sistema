@@ -60,6 +60,11 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Criar item personalizado',
+            onPressed: _createCustomItem,
+            icon: const Icon(Icons.add_box_outlined),
+          ),
+          IconButton(
             tooltip: 'Concluir',
             onPressed: () => Navigator.pop(context, _character),
             icon: const Icon(Icons.check),
@@ -276,6 +281,237 @@ class _InventoryManagementScreenState extends State<InventoryManagementScreen> {
       );
     }
     _update(_character.copyWith(inventory: inventory));
+  }
+
+  Future<void> _createCustomItem() async {
+    final formKey = GlobalKey<FormState>();
+    final name = TextEditingController();
+    final description = TextEditingController();
+    final imageUrl = TextEditingController();
+    final weight = TextEditingController(text: '0');
+    final quantity = TextEditingController(text: '1');
+    final bonusValue = TextEditingController(text: '1');
+    var type = 'Item';
+    var bonusTarget = '';
+    var equip = false;
+    const bonusOptions = {
+      '': 'Sem bônus',
+      'defense': 'Defesa',
+      'armorClass': 'CA',
+      'strength': 'Força',
+      'dexterity': 'Destreza',
+      'constitution': 'Constituição',
+      'intelligence': 'Inteligência',
+      'charisma': 'Carisma',
+      'faith': 'Fé',
+    };
+
+    final item = await showDialog<InventoryItem>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Criar item personalizado'),
+          content: SizedBox(
+            width: 520,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: name,
+                      maxLength: 120,
+                      decoration: const InputDecoration(labelText: 'Nome'),
+                      validator: (value) => value?.trim().isEmpty == true
+                          ? 'Informe o nome do item.'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: type,
+                      decoration: const InputDecoration(labelText: 'Tipo'),
+                      items:
+                          const [
+                                'Item',
+                                'Arma',
+                                'Armadura',
+                                'Consumível',
+                                'Ferramenta',
+                                'Acessório',
+                              ]
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => type = value ?? 'Item'),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: quantity,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Quantidade',
+                            ),
+                            validator: (value) {
+                              final parsed = int.tryParse(value ?? '');
+                              return parsed == null ||
+                                      parsed < 1 ||
+                                      parsed > 9999
+                                  ? 'Use 1 a 9999.'
+                                  : null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: weight,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Peso',
+                            ),
+                            validator: (value) {
+                              final parsed = double.tryParse(
+                                (value ?? '').replaceAll(',', '.'),
+                              );
+                              return parsed == null || parsed < 0
+                                  ? 'Peso inválido.'
+                                  : null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: bonusTarget,
+                      decoration: const InputDecoration(
+                        labelText: 'Bônus ao equipar',
+                      ),
+                      items: bonusOptions.entries
+                          .map(
+                            (entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => bonusTarget = value ?? ''),
+                    ),
+                    if (bonusTarget.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: bonusValue,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Valor do bônus',
+                        ),
+                        validator: (value) {
+                          final parsed = int.tryParse(value ?? '');
+                          return parsed == null ||
+                                  parsed == 0 ||
+                                  parsed.abs() > 20
+                              ? 'Use um valor entre -20 e 20, diferente de zero.'
+                              : null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: imageUrl,
+                      maxLength: 2000,
+                      decoration: const InputDecoration(
+                        labelText: 'URL da imagem (opcional)',
+                      ),
+                      validator: (value) {
+                        final text = value?.trim() ?? '';
+                        if (text.isEmpty) return null;
+                        final uri = Uri.tryParse(text);
+                        return uri != null &&
+                                (uri.scheme == 'http' || uri.scheme == 'https')
+                            ? null
+                            : 'Use uma URL HTTP ou HTTPS.';
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: description,
+                      maxLength: 2000,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(labelText: 'Descrição'),
+                    ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: equip,
+                      title: const Text('Criar já equipado'),
+                      onChanged: (value) =>
+                          setDialogState(() => equip = value ?? false),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                if (formKey.currentState?.validate() != true) return;
+                final value = int.tryParse(bonusValue.text) ?? 0;
+                final bonus = bonusTarget.isEmpty
+                    ? ''
+                    : '${bonusOptions[bonusTarget]}: ${value >= 0 ? '+' : ''}$value';
+                Navigator.pop(
+                  context,
+                  InventoryItem(
+                    id: newId('item'),
+                    name: name.text.trim(),
+                    type: type,
+                    description: description.text.trim(),
+                    imageUrl: imageUrl.text.trim(),
+                    weight: double.parse(weight.text.replaceAll(',', '.')),
+                    quantity: int.parse(quantity.text),
+                    bonus: bonus,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Criar item'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    name.dispose();
+    description.dispose();
+    imageUrl.dispose();
+    weight.dispose();
+    quantity.dispose();
+    bonusValue.dispose();
+    if (item == null || !mounted) return;
+    _update(
+      equip
+          ? _character.copyWith(equipment: [item, ..._character.equipment])
+          : _character.copyWith(inventory: [item, ..._character.inventory]),
+    );
   }
 
   void _quantity(InventoryItem item, int delta) {

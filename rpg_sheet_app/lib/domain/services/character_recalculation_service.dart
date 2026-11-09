@@ -56,13 +56,20 @@ class CharacterRecalculationService {
           ),
       ..._equipment.modifiers(normalizedCharacter, catalog),
     ];
-    final maximumMana = characterClass.manaFormula == null
-        ? normalizedCharacter.maxMana
-        : _formulas.evaluate(
-            characterClass.manaFormula,
-            normalizedCharacter,
-            modifiers: modifiers,
-          );
+    final manaFormula =
+        characterClass.manaFormula ??
+        const OfficialFormula(
+          base: 5,
+          terms: {'intelligence': 1, 'constitution': .5},
+        );
+    final maximumMana =
+        _formulas.evaluate(
+          manaFormula,
+          normalizedCharacter,
+          modifiers: modifiers,
+        ) +
+        normalizedCharacter.level -
+        1;
     final currentMana = _nextCurrent(
       normalizedCharacter.currentMana,
       normalizedCharacter.maxMana,

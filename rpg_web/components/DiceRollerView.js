@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Dices, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Dices, RotateCcw, Trash2 } from 'lucide-react';
 import { createRoll, rollFormula } from '../lib/catalogEngine';
 import { diceOptions } from '../lib/rpgData';
 import ThreeDice from './ThreeDice';
 
 const storageKey = 'runalith-dice-history-v1';
 
-export default function DiceRollerView({ queuedRoll, onComplete }) {
+export default function DiceRollerView({ queuedRoll, onComplete, onBack }) {
   const [sides, setSides] = useState(20);
   const [label, setLabel] = useState('Rolagem livre');
   const [modifier, setModifier] = useState('0');
@@ -85,6 +85,7 @@ export default function DiceRollerView({ queuedRoll, onComplete }) {
 
   return (
     <section className="dicePage">
+      {onBack && <button className="ghostButton diceBackButton" onClick={onBack} disabled={Boolean(queuedRoll)}><ArrowLeft aria-hidden="true" />Voltar à ficha</button>}
       <div className="diceHero">
         <div>
           <span className="eyebrow">Dice Roller</span>

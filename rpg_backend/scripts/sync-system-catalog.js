@@ -98,8 +98,8 @@ O resultado do cálculo é sempre arredondado para baixo.
 ## Progressão
 
 - Evolui indiretamente quando seus atributos aumentam.
-- A cada 20 XP acumulados na área correspondente, o jogador pode converter o XP em +1 permanente nesta perícia.
-- Alternativamente, os 20 XP podem virar +1 em um atributo relacionado, com aprovação do mestre e respeitando o custo/limite do atributo.
+- 1 Ponto de Desenvolvimento concede +1 permanente nesta perícia.
+- O bônus comprado com PD possui limite de +5 por perícia.
 
 Fonte: regras oficiais fornecidas pelo autor do sistema.`;
 }
@@ -150,7 +150,7 @@ Teste direto: 1d20 + atributo.`;
 }
 
 function experienceDescription() {
-  return `# Experiência de Classe, Área e Combate
+  return `# Experiência de Classe e Desenvolvimento
 
 ## XP de Classe por sessão
 
@@ -171,46 +171,32 @@ Todo personagem participante recebe +1 XP de Classe. O mestre soma os critérios
 | Completar objetivo pessoal | +1 a +2 |
 | Destaque da sessão | +1 |
 
-Custos: para atingir os níveis 2-5 são necessários 20 XP; para atingir os níveis 6-10 são necessários 40 XP; Excelência após o nível 10 custa 75 XP e exige o requisito da classe.
-
-## Experiência por Área e Combate
-
-XP não é um valor geral único. O personagem mantém XP separado por área e um contador de XP de combate.
-
-## Fora de combate
-
-Áreas sugeridas: Investigação, Coleta, Medicina, Religião, Furtividade, Diplomacia, Sobrevivência e outras definidas pelo mestre.
-
-| Impacto na cena | XP |
+| Evolução | Custo |
 | --- | ---: |
-| Participação leve | 1 |
-| Boa participação | 2 |
-| Destaque claro | 3 |
-| Performance excepcional | 4 |
+| Nível 1 → 2 | 10 XP |
+| Nível 2 → 3 | 15 XP |
+| Nível 3 → 4 | 20 XP |
+| Nível 4 → 5 | 25 XP |
+| Nível 5 → 6 | 30 XP |
+| Nível 6 → 7 | 35 XP |
+| Nível 7 → 8 | 45 XP |
+| Nível 8 → 9 | 50 XP |
+| Nível 9 → 10 | 55 XP |
 
-A cada 20 XP em uma área, converta em +1 permanente na perícia específica ou +1 no atributo relacionado, mediante aprovação do mestre.
+Excelência após o nível 10 custa 75 XP adicionais e exige o requisito da classe.
 
-## Combate
+## XP de Desenvolvimento
 
-XP recebido = XP base da dificuldade + XP individual de participação.
+Combate, investigação, interação social, exploração, sobrevivência e treinamento usam um único contador. O mestre concede individualmente de 1 a 4 XP por cena relevante: participação relevante, boa contribuição, grande contribuição ou feito excepcional. Ações repetitivas e sem risco podem conceder 0 XP.
 
-| Dificuldade | XP base |
-| --- | ---: |
-| Fácil | 1 |
-| Moderado | 2 |
-| Difícil | 3 |
-| Mortal | 4 |
+A cada 20 XP, o personagem recebe 1 Ponto de Desenvolvimento e os 20 XP são consumidos.
 
-| Participação | XP extra |
-| --- | ---: |
-| Participou pouco | 1 |
-| Participação moderada | 2 |
-| Participou bastante | 3 |
-| Carregou o combate | 4 |
+- Atributo atual de +0 a +5: 1 PD por +1.
+- Atributo atual de +6 a +10: 2 PD por +1.
+- Atributo acima de +10: 5 PD por +1.
+- Perícia: 1 PD por +1 permanente, limitado a +5 comprado com PD.
 
-O máximo em combate Mortal é 8 XP. Quem não participou recebe 0 XP.
-
-A cada 25 XP de combate, converta em +1 em um atributo permitido pela classe. A escolha deve ser coerente com o estilo usado no combate e aprovada pelo mestre.`;
+O limite absoluto de atributo continua sendo +20 e toda evolução depende da aprovação do mestre.`;
 }
 
 function humanityDescription() {
@@ -224,7 +210,7 @@ Todo personagem possui Humanidade e Divindade entre 0 e 100. Ao gastar Humanidad
 | --- | --- | ---: | --- |
 | 100-81 | Humanidade plena | - | Sem influência suficiente para exigir teste. |
 | 80-51 | Humanidade estável | 17 | Transformações mínimas; Clérigo e Paladino usam CD 15 pela regra específica da classe. |
-| 50-26 | Influência divina | 18 | Dano de Magia Divina recebe +Fé. Acerto divino = floor(Divindade ÷ 15), máximo +5. |
+| 50-26 | Influência divina | 18 | Dano de Magia Divina recebe +5% da Divindade. Acerto divino = floor(Divindade ÷ 15), máximo +5. |
 | 25-11 | Domínio divino severo | 18 | Falha pode causar perda da ação, controle temporário e 1d20 de dano. |
 | 10-2 | Humanidade crítica | 19 | Apenas Milagres reduzem Humanidade; bônus continuam escalando. |
 | 1 | Estado de Avatar | Especial | Teste de controle a cada turno; falha leva a Humanidade 0. |

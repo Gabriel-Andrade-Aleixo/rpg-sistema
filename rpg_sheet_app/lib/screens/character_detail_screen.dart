@@ -147,6 +147,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         _resources(),
         SectionCard(title: 'Humanidade e Divindade', child: _humanitySection()),
         SectionCard(title: 'Corrupção', child: _corruptionSection()),
+        SectionCard(title: 'Sorte', child: _luckSection()),
         SectionCard(
           title: 'Defesa e Classe de Armadura',
           child: _defenseSection(),
@@ -604,6 +605,14 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                   ),
                   const SizedBox(height: 3),
                   Text(_techniqueCostLabel(technique)),
+                  Text(
+                    '${_techniqueStateLabel(technique)} · ${technique.trainingHours}h de treino',
+                  ),
+                  Text(
+                    'Aprendizado CD ${technique.learningDifficulty}: ${technique.trainingSuccesses}/3 · '
+                    'Execução CD ${technique.executionDifficulty}: ${technique.executionSuccesses}/3 · '
+                    'Domínio por treino: ${technique.masteryTrainingSuccesses}/5',
+                  ),
                   if (technique.damage.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text('Dano/efeito: ${technique.damage}'),
@@ -635,12 +644,33 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                         onPressed:
                             !inCombat ||
                                 technique.usedThisCombat ||
-                                technique.cooldownRemaining > 0
+                                technique.cooldownRemaining > 0 ||
+                                technique.learningState == 'unlearned'
                             ? null
                             : () => _useTechnique(technique),
-                        child: const Text('Usar'),
+                        child: Text(
+                          technique.learningState == 'partial'
+                              ? 'Executar com sucesso'
+                              : 'Usar',
+                        ),
                       ),
                       if (!inCombat) ...[
+                        if (technique.learningState != 'mastered') ...[
+                          OutlinedButton(
+                            onPressed: () => _recordTechniqueTraining(
+                              technique,
+                              succeeded: true,
+                            ),
+                            child: const Text('Treino: sucesso'),
+                          ),
+                          OutlinedButton(
+                            onPressed: () => _recordTechniqueTraining(
+                              technique,
+                              succeeded: false,
+                            ),
+                            child: const Text('Treino: falha'),
+                          ),
+                        ],
                         OutlinedButton(
                           onPressed: () => _showTechniqueEditor(technique),
                           child: const Text('Editar'),
@@ -673,8 +703,39 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         _ => 'Sem limite especial',
       };
 
+  String _techniqueStateLabel(CombatTechnique technique) =>
+      switch (technique.learningState) {
+        'mastered' => 'Dominada',
+        'partial' => 'Aprendizado parcial',
+        _ => 'Em treinamento',
+      };
+
+  Future<void> _recordTechniqueTraining(
+    CombatTechnique technique, {
+    required bool succeeded,
+  }) async {
+    final result = _techniques.recordTraining(
+      _character,
+      technique.id,
+      succeeded: succeeded,
+    );
+    if (result.error.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.error)));
+      }
+      return;
+    }
+    await _persist(result.character);
+  }
+
   Future<void> _useTechnique(CombatTechnique technique) async {
-    final result = _techniques.use(_character, technique.id);
+    final result = _techniques.use(
+      _character,
+      technique.id,
+      executionSucceeded: technique.learningState == 'partial',
+    );
     if (result.error.isNotEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -696,6 +757,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     final cooldown = TextEditingController(
       text:
           '${existing?.cooldownTurns == 0 ? 1 : existing?.cooldownTurns ?? 1}',
+    );
+    final learningDifficulty = TextEditingController(
+      text: '${existing?.learningDifficulty ?? 15}',
+    );
+    final executionDifficulty = TextEditingController(
+      text: '${existing?.executionDifficulty ?? 10}',
     );
     var costType = existing?.costType ?? 'none';
     final accepted = await showDialog<bool>(
@@ -753,6 +820,20 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                       ),
                     ),
                   TextField(
+                    controller: learningDifficulty,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'CD de aprendizado',
+                    ),
+                  ),
+                  TextField(
+                    controller: executionDifficulty,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'CD de execução',
+                    ),
+                  ),
+                  TextField(
                     controller: training,
                     maxLength: 500,
                     maxLines: 2,
@@ -790,6 +871,8 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         training: training.text,
         costType: costType,
         cooldownTurns: int.tryParse(cooldown.text) ?? 1,
+        learningDifficulty: int.tryParse(learningDifficulty.text) ?? 15,
+        executionDifficulty: int.tryParse(executionDifficulty.text) ?? 10,
         editingId: existing?.id ?? '',
       );
       if (result.error.isNotEmpty && mounted) {
@@ -805,6 +888,8 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     description.dispose();
     training.dispose();
     cooldown.dispose();
+    learningDifficulty.dispose();
+    executionDifficulty.dispose();
   }
 
   bool get _hasRuleContext {
@@ -1071,6 +1156,32 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         'A Flecha Mágica causa 2d4 de dano. As infusões abaixo aprimoram esse único disparo e aplicam Cadência, Mana e Foco.',
       ),
       const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => _persist(
+              _classActions.advanceSpectralTurn(_character, attacked: true),
+            ),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Novo turno · atacou'),
+          ),
+          OutlinedButton(
+            onPressed: () => _persist(
+              _classActions.advanceSpectralTurn(_character, attacked: false),
+            ),
+            child: const Text('Não atacou'),
+          ),
+          OutlinedButton(
+            onPressed: () => _persist(
+              _classActions.advanceSpectralTurn(_character, tookDamage: true),
+            ),
+            child: const Text('Sofreu dano'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
       for (final infusion in ClassActionService.infusions)
         Card(
           child: ListTile(
@@ -1305,7 +1416,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             children: [
               Text(spell.name, style: Theme.of(context).textTheme.titleSmall),
               Text(
-                '${spell.type} · ${_spellManaCost(spell)} PM${spell.focusCost > 0 ? ' · ${spell.focusCost} Foco' : ''}${spell.humanityCost > 0 ? ' · ${spell.humanityCost} HM' : ''}',
+                '${spell.type}${spell.degree > 0 ? ' · Grau ${spell.degree}' : ''} · ${_spellManaCost(spell)} PM${spell.focusCost > 0 ? ' · ${spell.focusCost} Foco' : ''}${spell.humanityCost > 0 ? ' · ${spell.humanityCost} HM' : ''}',
               ),
               Text(
                 spell.mastered
@@ -1425,7 +1536,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                       ],
                     ),
                     Text(
-                      '${spell.type} · ${_spellManaCost(spell)} PM · ${spell.focusCost} Foco · ${spell.humanityCost} Humanidade',
+                      '${spell.type}${spell.degree > 0 ? ' · Grau ${spell.degree}' : ''} · ${_spellManaCost(spell)} PM · ${spell.focusCost} Foco · ${spell.humanityCost} Humanidade',
                     ),
                     Text(
                       spell.mastered
@@ -1479,7 +1590,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       switch (infusion.id) {
         'impact' => 'Dano: 2d4 +1; +2 com 3 Cadência',
         'piercing' => 'Dano: 2d4 +1',
-        'spectral' => 'Dano: 2d4; no erro, 40% arredondado para baixo',
+        'spectral' => 'Dano: 2d4; no acerto, até 2 ataques encadeados',
         _ => 'Dano: 2d4',
       };
 
@@ -1676,6 +1787,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       humanityCost: (costs['humanity'] as num?)?.toInt() ?? 0,
       range: metadata['range']?.toString() ?? '',
       damage: metadata['damage']?.toString() ?? '',
+      degree:
+          (metadata['degree'] as num?)?.toInt() ??
+          (metadata['level'] as num?)?.toInt() ??
+          0,
       imageUrl: entry.imageUrl,
       actionType: metadata['actionType']?.toString() ?? '',
       actionId: metadata['actionId']?.toString() ?? '',
@@ -2048,7 +2163,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             if (_humanity.getFaithDamageBonus(_character))
               Chip(
                 label: Text(
-                  'Dano divino +${_humanity.faithDamageBonus(_character)} (Fé / 2)',
+                  'Dano divino +${_humanity.faithDamageBonus(_character)} (5% da Divindade)',
                 ),
               ),
             if (!status.playable)
@@ -2081,6 +2196,38 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
               icon: const Icon(Icons.casino_outlined),
               label: const Text('Resistência Divina'),
             ),
+            OutlinedButton(
+              onPressed: humanity >= 100
+                  ? null
+                  : () => _persist(
+                      _humanity.restore(
+                        _character,
+                        5,
+                        'Recuperação ao fim do combate',
+                      ),
+                    ),
+              child: const Text('Fim do combate +5'),
+            ),
+            OutlinedButton(
+              onPressed: humanity >= 100
+                  ? null
+                  : () => _persist(
+                      _humanity.restore(
+                        _character,
+                        10,
+                        'Recuperação após 5 turnos',
+                      ),
+                    ),
+              child: const Text('5 turnos +10'),
+            ),
+            OutlinedButton(
+              onPressed: humanity >= 100
+                  ? null
+                  : () => _persist(
+                      _humanity.restore(_character, 100, 'Descanso completo'),
+                    ),
+              child: const Text('Descanso completo'),
+            ),
           ],
         ),
         if (_character.humanityHistory.isNotEmpty) ...[
@@ -2102,6 +2249,139 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _luckSection() {
+    final luck = (_character.resources['luck'] ?? 0).clamp(0, 3);
+    final pending = _character.resources['pendingLuckBonus'] ?? 0;
+    final description = switch (luck) {
+      1 => 'Repete uma rolagem; o segundo resultado é obrigatório.',
+      2 => 'Adiciona +1 à próxima rolagem antes da confirmação.',
+      3 => 'Repete o dano de um ataque; o segundo resultado é obrigatório.',
+      _ => 'Nenhum efeito de Sorte ativo.',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(label: Text('Nível ativo $luck')),
+            Chip(label: Text('Bônus pendente +$pending')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(description),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: luck == 0 ? null : _useLuck,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Usar Sorte'),
+            ),
+            OutlinedButton(
+              onPressed: luck == 0 && pending == 0
+                  ? null
+                  : () => _persist(
+                      _character.copyWith(
+                        resources: {
+                          ..._character.resources,
+                          'luck': 0,
+                          'pendingLuckBonus': 0,
+                        },
+                      ),
+                    ),
+              child: const Text('Encerrar sessão'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _useLuck() async {
+    final luck = (_character.resources['luck'] ?? 0).clamp(0, 3);
+    if (luck == 0) return;
+    final label = switch (luck) {
+      1 => 'Repetir uma rolagem',
+      2 => 'Adicionar +1 à próxima rolagem',
+      _ => 'Repetir o dano de um ataque',
+    };
+    DiceRollRecord? roll;
+    if (luck != 2) {
+      roll = await DiceResultModal.show(
+        context,
+        characterId: _character.id,
+        type: luck == 3 ? 'damage' : 'luck',
+        name: label,
+        sides: luck == 3 ? 6 : 20,
+      );
+      if (roll == null) return;
+    }
+    await _persist(
+      _character.copyWith(
+        resources: {
+          ..._character.resources,
+          'luck': 0,
+          'pendingLuckBonus': luck == 2 ? 1 : 0,
+        },
+        rollHistory: roll == null
+            ? _character.rollHistory
+            : [roll, ..._character.rollHistory].take(30).toList(),
+        actionHistory: [
+          ActionUseRecord(
+            id: newId('luck'),
+            name: 'Sorte $luck',
+            result: label,
+            createdAt: DateTime.now(),
+          ),
+          ..._character.actionHistory,
+        ].take(100).toList(),
+      ),
+    );
+  }
+
+  DiceRollRecord _applyPendingLuck(DiceRollRecord record) {
+    final bonus = _character.resources['pendingLuckBonus'] ?? 0;
+    if (bonus <= 0) return record;
+    return DiceRollRecord(
+      id: record.id,
+      characterId: record.characterId,
+      type: record.type,
+      name: record.name,
+      die: record.die,
+      rawResult: record.rawResult,
+      finalResult: record.finalResult + bonus,
+      createdAt: record.createdAt,
+      modifiers: [
+        ...record.modifiers,
+        Modifier(
+          id: 'luck_bonus',
+          sourceId: _character.id,
+          sourceName: 'Sorte',
+          sourceType: 'luck',
+          targetType: 'roll',
+          targetId: record.type,
+          value: bonus,
+        ),
+      ],
+      penalties: record.penalties,
+      origin: record.origin,
+    );
+  }
+
+  Future<void> _persistRoll(DiceRollRecord record) async {
+    final adjusted = _applyPendingLuck(record);
+    await _persist(
+      _character.copyWith(
+        resources: {..._character.resources, 'pendingLuckBonus': 0},
+        rollHistory: [adjusted, ..._character.rollHistory].take(30).toList(),
+      ),
     );
   }
 
@@ -2348,14 +2628,11 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       ],
     );
     if (result == null) return;
-    await _persist(
-      _character.copyWith(
-        rollHistory: [result, ..._character.rollHistory].take(30).toList(),
-      ),
-    );
+    final adjusted = _applyPendingLuck(result);
+    await _persistRoll(result);
     if (mounted) {
       _message(
-        result.finalResult >= difficulty
+        adjusted.finalResult >= difficulty
             ? 'Resistência Divina bem-sucedida.'
             : 'Falha na Resistência Divina. Aplique o efeito do estado atual.',
       );
@@ -2487,21 +2764,47 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         : parsedClass?.defenseFormula;
     final defense = _combat.defense(_character, formula);
     final armorClass = _combat.armorClass(_character, formula);
-    final terms = formula?.terms.entries.map((entry) {
+    final activeTerms =
+        formula?.terms ?? const {'dexterity': .7, 'constitution': .3};
+    final termValues = activeTerms.entries.map((entry) {
       final attribute = AttributeId.values
           .where((item) => item.name == entry.key)
           .firstOrNull;
-      return '${attribute?.label ?? entry.key} × ${(entry.value * 100).round()}%';
+      final value = attribute == null
+          ? 0
+          : _attributes
+                .calculate(_character, attribute, _character.modifiers)
+                .total;
+      return (
+        label: attribute?.label ?? entry.key,
+        value: value,
+        weight: entry.value,
+        contribution: value * entry.value,
+      );
     }).toList();
-    final formulaText = terms?.isNotEmpty == true
-        ? 'Defesa = floor(${terms!.join(' + ')})'
-        : 'Defesa = floor(Destreza × 70% + Constituição × 30%)';
-    final equipment = _character.modifiers.where(
-      (item) =>
-          item.sourceType == 'equipment' &&
-          item.targetType == 'stat' &&
-          (item.targetId == 'defense' || item.targetId == 'armorClass'),
-    );
+    final formulaBase = formula?.base ?? 0;
+    final rawDefense =
+        formulaBase +
+        termValues.fold<double>(0, (sum, term) => sum + term.contribution);
+    final roundedDefense = rawDefense.floor().clamp(0, 999999);
+    final statModifiers = _character.modifiers
+        .where(
+          (item) =>
+              item.targetType == 'stat' &&
+              (item.targetId == 'defense' ||
+                  item.targetId == 'armorClass' ||
+                  item.targetId == 'armorclass'),
+        )
+        .toList();
+    final defenseBonus = statModifiers
+        .where((item) => item.targetId == 'defense')
+        .fold<num>(0, (sum, item) => sum + item.value);
+    final armorClassBonus = statModifiers
+        .where(
+          (item) =>
+              item.targetId == 'armorClass' || item.targetId == 'armorclass',
+        )
+        .fold<num>(0, (sum, item) => sum + item.value);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2529,17 +2832,52 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           const Chip(label: Text('Defesa Adaptativa ativa')),
           const SizedBox(height: 8),
         ],
-        Text('$formulaText\nCA = 10 + Defesa + bônus direto de CA'),
-        if (equipment.isNotEmpty) ...[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Cálculo bruto',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              for (final term in termValues)
+                Text(
+                  '${term.label}: ${term.value} × ${(term.weight * 100).round()}% = ${_formatDecimal(term.contribution)}',
+                ),
+              if (formulaBase != 0)
+                Text('Base da fórmula: ${_formatSigned(formulaBase)}'),
+              Text(
+                'Soma bruta: ${_formatDecimal(rawDefense)} → floor = $roundedDefense',
+              ),
+              Text(
+                'Defesa: $roundedDefense ${_formatSigned(defenseBonus)} = $defense',
+              ),
+              Text(
+                'CA: 10 + $defense ${_formatSigned(armorClassBonus)} = $armorClass',
+              ),
+            ],
+          ),
+        ),
+        if (statModifiers.isNotEmpty) ...[
           const SizedBox(height: 10),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final modifier in equipment)
+              for (final modifier in statModifiers)
                 Chip(
                   label: Text(
-                    '${modifier.sourceName}: +${modifier.value} ${modifier.targetId == 'defense' ? 'Defesa' : 'CA'}',
+                    '${modifier.sourceName}: ${_formatSigned(modifier.value)} ${modifier.targetId == 'defense' ? 'Defesa' : 'CA'}',
                   ),
                 ),
             ],
@@ -2548,6 +2886,16 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       ],
     );
   }
+
+  String _formatDecimal(num value) {
+    final text = value.toStringAsFixed(2);
+    return text
+        .replaceFirst(RegExp(r'\.00$'), '')
+        .replaceFirst(RegExp(r'(\.\d)0$'), r'$1');
+  }
+
+  String _formatSigned(num value) =>
+      '${value >= 0 ? '+' : '-'} ${_formatDecimal(value.abs())}';
 
   Widget _defenseMetric(String label, int value) {
     final scheme = Theme.of(context).colorScheme;
@@ -2574,21 +2922,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
 
   Widget _experienceSection() {
     final classCost = _experience.classXpRequired(_character.level);
-    final eligibleAreas = _character.areaExperience.entries
-        .where((entry) => entry.value >= 20)
-        .toList();
-    final combatTargets = _class == null
-        ? <AttributeId>[]
-        : _parser
-              .parseClass(_class!)
-              .allowedCombatXpAttributes
-              .map(
-                (id) => AttributeId.values
-                    .where((item) => item.name == id)
-                    .firstOrNull,
-              )
-              .whereType<AttributeId>()
-              .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2604,57 +2937,43 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('XP de Combate'),
-          subtitle: const Text(
-            '25 XP podem ser convertidos em atributo permitido',
-          ),
-          trailing: Text('${_character.combatXp}/25'),
+          title: const Text('XP de Desenvolvimento'),
+          subtitle: const Text('A cada 20 XP, converta em 1 PD'),
+          trailing: Text('${_character.developmentXp}/20'),
         ),
-        for (final entry in _character.areaExperience.entries)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(entry.key),
-            subtitle: const Text('20 XP permitem uma conversão'),
-            trailing: Text('${entry.value}/20'),
-          ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Pontos de Desenvolvimento'),
+          subtitle: const Text('Use em atributos ou perícias'),
+          trailing: Text('${_character.developmentPoints} PD'),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             OutlinedButton.icon(
-              onPressed: _registerAreaXp,
+              onPressed: _registerDevelopmentXp,
               icon: const Icon(Icons.add_task),
-              label: const Text('XP de área'),
+              label: const Text('Registrar cena'),
             ),
             OutlinedButton.icon(
-              onPressed: _registerCombatXp,
-              icon: const Icon(Icons.sports_martial_arts_outlined),
-              label: const Text('XP de combate'),
-            ),
-            OutlinedButton.icon(
-              onPressed: eligibleAreas.isEmpty
+              onPressed: _character.developmentXp < 20
                   ? null
-                  : () => _convertAreaXp(eligibleAreas),
+                  : () =>
+                        _persist(_experience.convertDevelopmentXp(_character)),
               icon: const Icon(Icons.swap_horiz),
-              label: const Text('Converter área'),
+              label: const Text('Converter em PD'),
             ),
             OutlinedButton.icon(
-              onPressed: _character.combatXp < 25 || combatTargets.isEmpty
+              onPressed: _character.developmentPoints < 1
                   ? null
-                  : () => _convertCombatXp(combatTargets),
+                  : _spendDevelopmentPoint,
               icon: const Icon(Icons.upgrade),
-              label: const Text('Converter combate'),
+              label: const Text('Gastar PD'),
             ),
           ],
         ),
-        if (_character.combatXp >= 25 && combatTargets.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 10),
-            child: Text(
-              'O arquivo não lista os atributos permitidos para esta classe; a conversão de combate permanece bloqueada.',
-            ),
-          ),
         if (_character.experienceHistory.isNotEmpty) ...[
           const Divider(height: 28),
           ExpansionTile(
@@ -2679,6 +2998,196 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
+  Future<void> _registerDevelopmentXp() async {
+    var amount = 1;
+    var description = 'Participação relevante';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Registrar XP de Desenvolvimento'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                initialValue: amount,
+                decoration: const InputDecoration(labelText: 'Contribuição'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 1,
+                    child: Text('Participação relevante · 1 XP'),
+                  ),
+                  DropdownMenuItem(
+                    value: 2,
+                    child: Text('Boa contribuição · 2 XP'),
+                  ),
+                  DropdownMenuItem(
+                    value: 3,
+                    child: Text('Grande contribuição · 3 XP'),
+                  ),
+                  DropdownMenuItem(
+                    value: 4,
+                    child: Text('Feito excepcional · 4 XP'),
+                  ),
+                ],
+                onChanged: (value) => setDialogState(() => amount = value ?? 1),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: description,
+                decoration: const InputDecoration(
+                  labelText: 'Contexto da cena',
+                ),
+                onChanged: (value) => description = value,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Registrar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true) {
+      await _persist(
+        _experience.registerDevelopmentXp(_character, amount, description),
+      );
+    }
+  }
+
+  Future<void> _spendDevelopmentPoint() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.auto_awesome),
+              title: const Text('Aumentar atributo'),
+              subtitle: const Text('Custa 1, 2 ou 5 PD conforme o valor atual'),
+              onTap: () => Navigator.pop(context, 'attribute'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.psychology_outlined),
+              title: const Text('Aumentar perícia'),
+              subtitle: const Text('Custa 1 PD; limite de +5 por perícia'),
+              onTap: () => Navigator.pop(context, 'skill'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'attribute') await _spendDevelopmentOnAttribute();
+    if (choice == 'skill') await _spendDevelopmentOnSkill();
+  }
+
+  Future<void> _spendDevelopmentOnAttribute() async {
+    var selected = AttributeId.values.first;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final value = _attributes
+              .calculate(_character, selected, _character.modifiers)
+              .total;
+          final cost = _experience.developmentAttributeCost(value);
+          return AlertDialog(
+            title: const Text('Aumentar atributo'),
+            content: DropdownButtonFormField<AttributeId>(
+              initialValue: selected,
+              decoration: InputDecoration(labelText: 'Atributo · $cost PD'),
+              items: [
+                for (final item in AttributeId.values)
+                  DropdownMenuItem(value: item, child: Text(item.label)),
+              ],
+              onChanged: (value) =>
+                  setDialogState(() => selected = value ?? selected),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: _character.developmentPoints < cost || value >= 20
+                    ? null
+                    : () => Navigator.pop(context, true),
+                child: const Text('Confirmar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (confirmed == true) {
+      final value = _attributes
+          .calculate(_character, selected, _character.modifiers)
+          .total;
+      await _persist(
+        _experience.spendDevelopmentOnAttribute(_character, selected, value),
+      );
+    }
+  }
+
+  Future<void> _spendDevelopmentOnSkill() async {
+    if (widget.catalog.skills.isEmpty) return;
+    var selected = widget.catalog.skills.first;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final spent = _character.developmentSkillBonuses[selected.id] ?? 0;
+          return AlertDialog(
+            title: const Text('Aumentar perícia'),
+            content: DropdownButtonFormField<CatalogEntry>(
+              initialValue: selected,
+              decoration: InputDecoration(labelText: 'Perícia · $spent/5'),
+              items: [
+                for (final item in widget.catalog.skills)
+                  DropdownMenuItem(value: item, child: Text(item.name)),
+              ],
+              onChanged: (value) =>
+                  setDialogState(() => selected = value ?? selected),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: spent >= 5
+                    ? null
+                    : () => Navigator.pop(context, true),
+                child: const Text('Gastar 1 PD'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (confirmed == true) {
+      await _persist(
+        _experience.spendDevelopmentOnSkill(
+          _character,
+          selected.id,
+          selected.name,
+        ),
+      );
+    }
+  }
+
+  // Legacy helpers kept only to deserialize and inspect pre-V0.3 histories.
+  // ignore: unused_element
   Future<void> _registerAreaXp() async {
     final areas = <String>{
       'Investigação',
@@ -2756,6 +3265,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _registerCombatXp() async {
     var base = 1;
     var participation = 1;
@@ -2875,6 +3385,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ],
         );
 
+  // ignore: unused_element
   Future<void> _convertAreaXp(List<MapEntry<String, int>> eligible) async {
     var selectedArea = eligible.first.key;
     final confirmed = await showDialog<bool>(
@@ -2958,6 +3469,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _convertCombatXp(List<AttributeId> targets) async {
     var selected = targets.first;
     final confirmed = await showDialog<bool>(
@@ -3037,11 +3549,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       modifiers: modifiers,
     );
     if (result != null) {
-      await _persist(
-        _character.copyWith(
-          rollHistory: [result, ..._character.rollHistory].take(30).toList(),
-        ),
-      );
+      await _persistRoll(result);
     }
   }
 
@@ -3075,11 +3583,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       modifiers: modifiers,
     );
     if (result != null) {
-      await _persist(
-        _character.copyWith(
-          rollHistory: [result, ..._character.rollHistory].take(30).toList(),
-        ),
-      );
+      await _persistRoll(result);
     }
   }
 
@@ -3092,11 +3596,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       sides: sides,
     );
     if (result != null) {
-      await _persist(
-        _character.copyWith(
-          rollHistory: [result, ..._character.rollHistory].take(30).toList(),
-        ),
-      );
+      await _persistRoll(result);
     }
   }
 

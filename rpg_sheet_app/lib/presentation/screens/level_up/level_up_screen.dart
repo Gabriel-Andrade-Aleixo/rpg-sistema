@@ -31,10 +31,10 @@ class _LevelUpScreenState extends State<LevelUpScreen> {
   static const _experience = ExperienceService();
   static const _formulas = OfficialFormulaCalculator();
   final _recalculation = CharacterRecalculationService();
-  final _xpGain = TextEditingController(text: '1');
-  final _xpNote = TextEditingController(text: 'Participação na sessão +1');
+  final _xpGain = TextEditingController(text: '0');
+  final _xpNote = TextEditingController();
   final _rawRoll = TextEditingController();
-  ClassXpBreakdown? _xpBreakdown = ClassXpRules.calculate({'participation': 1});
+  ClassXpBreakdown? _xpBreakdown;
 
   @override
   void dispose() {

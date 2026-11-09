@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   advanceTechniqueTurn,
   canLearnCombatTechniques,
+  recordTechniqueTraining,
   saveCombatTechnique,
   setTechniqueCombatState,
   useCombatTechnique,
@@ -28,16 +29,31 @@ test('técnica só pode ser treinada fora de combate', () => {
 });
 
 test('uso aplica recarga, avança turnos e encerra combate limpo', () => {
-  const learned = saveCombatTechnique(emptyCharacter(), {
+  let learned = saveCombatTechnique(emptyCharacter(), {
     name: 'Machadadas gêmeas', costType: 'cooldown', cooldownTurns: 2,
   }).character;
+  const id = learned.techniques[0].id;
+  learned = recordTechniqueTraining(learned, id, true).character;
+  learned = recordTechniqueTraining(learned, id, true).character;
+  learned = recordTechniqueTraining(learned, id, true).character;
+  assert.equal(learned.techniques[0].learningState, 'partial');
   const active = setTechniqueCombatState(learned, true);
-  const used = useCombatTechnique(active, active.techniques[0].id);
+  const used = useCombatTechnique(active, active.techniques[0].id, { executionSucceeded: true });
   assert.equal(used.error, '');
   assert.equal(used.character.techniques[0].cooldownRemaining, 2);
-  assert.match(useCombatTechnique(used.character, active.techniques[0].id).error, /recarrega/);
+  assert.match(useCombatTechnique(used.character, active.techniques[0].id, { executionSucceeded: true }).error, /recarrega/);
   assert.equal(advanceTechniqueTurn(used.character).techniques[0].cooldownRemaining, 1);
   assert.equal(setTechniqueCombatState(used.character, false).techniques[0].cooldownRemaining, 0);
+});
+
+test('oito treinos bem-sucedidos dominam uma técnica sem execução em combate', () => {
+  let character = saveCombatTechnique(emptyCharacter(), { name: 'Corte lunar' }).character;
+  const id = character.techniques[0].id;
+  for (let index = 0; index < 8; index += 1) character = recordTechniqueTraining(character, id, true).character;
+  assert.equal(character.techniques[0].trainingHours, 8);
+  assert.equal(character.techniques[0].trainingSuccesses, 3);
+  assert.equal(character.techniques[0].masteryTrainingSuccesses, 5);
+  assert.equal(character.techniques[0].learningState, 'mastered');
 });
 
 test('classes sem Mana ou usuárias de armas podem aprender técnicas', () => {

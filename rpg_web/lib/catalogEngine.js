@@ -92,6 +92,11 @@ export function migrateCharacter(raw, catalog) {
     classXp: Number(raw.classXp || 0),
     classXpTotal: Number(raw.classXpTotal || 0),
     classXpHistory: raw.classXpHistory || [],
+    xpSystemVersion: raw.xpSystemVersion === undefined ? 0 : Number(raw.xpSystemVersion),
+    developmentXp: Number(raw.developmentXp || 0),
+    developmentPoints: Number(raw.developmentPoints || 0),
+    developmentAttributeBonuses: raw.developmentAttributeBonuses || {},
+    developmentSkillBonuses: raw.developmentSkillBonuses || {},
     areaExperience: Object.fromEntries(Object.entries(raw.areaExperience || {}).map(([name, value]) => [name, Number(typeof value === 'object' ? value?.xp : value) || 0])),
     combatXp: Number(raw.combatXp || 0),
     experienceHistory: raw.experienceHistory || [],
@@ -250,6 +255,7 @@ export function parseCatalogSpell(entry) {
     className: metadata.className || '',
     actionType: metadata.actionType || '',
     actionId: metadata.actionId || '',
+    degree: Number(metadata.level || String(topic).match(/grau\s+(\d+)/i)?.[1] || 0),
   };
 }
 
@@ -338,7 +344,7 @@ export function recalculateCharacter(character, catalog) {
   const characterClass = parseClass(classEntry);
   const equipmentModifiers = (character.equipment || []).flatMap((item) => {
     const entry = findEntry(catalog, item.catalogId);
-    return parseEquipmentModifiers(entry || { id: item.id, name: item.name, description: `${item.description || ''}\n${item.bonus || ''}`, category: item.type || 'Item personalizado' });
+    return parseEquipmentModifiers(entry || { id: item.id, name: item.name, description: item.bonus || '', category: item.type || 'Item personalizado' });
   });
   const permanentModifiers = Object.entries(character.permanentAttributeBonuses || {})
     .filter(([, value]) => Number(value) !== 0)
@@ -380,7 +386,8 @@ export function recalculateCharacter(character, catalog) {
     nextResources[currentKey] = nextResourceCurrent(nextResources[currentKey], nextResources[maxKey], maximum);
     nextResources[maxKey] = maximum;
   }
-  const maximumMana = characterClass.manaFormula ? evaluateFormula(characterClass.manaFormula, character.attributes, modifiers) : Number(character.maxMana || 0);
+  const manaFormula = characterClass.manaFormula || { base: 5, terms: [{ attribute: 'intelligence', weight: 1 }, { attribute: 'constitution', weight: .5 }] };
+  const maximumMana = evaluateFormula(manaFormula, character.attributes, modifiers) + Math.max(0, Number(character.level || 1) - 1);
   const currentMana = nextResourceCurrent(character.currentMana, character.maxMana, maximumMana);
   return {
     ...character,
@@ -507,8 +514,8 @@ export function skillValue(character, parsedSkill) {
 
 export function attributePointCost(currentValue) {
   const current = Number(currentValue || 0);
-  if (current < 5) return 1;
-  if (current < 10) return 2;
+  if (current <= 5) return 1;
+  if (current <= 10) return 2;
   return 5;
 }
 
@@ -539,8 +546,9 @@ export function armorClassValue(character, classEntry = null) {
 }
 
 export function classXpRequired(currentLevel) {
-  if (currentLevel >= 10) return 75;
-  return currentLevel < 5 ? 20 : 40;
+  return ({ 1: 10, 2: 15, 3: 20, 4: 25, 5: 30, 6: 35, 7: 45, 8: 50, 9: 55, 10: 75 })[
+    Math.max(1, Math.min(10, Number(currentLevel) || 1))
+  ];
 }
 
 export function allowedCombatXpTargets(classEntry) {

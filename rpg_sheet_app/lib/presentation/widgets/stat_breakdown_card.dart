@@ -22,7 +22,16 @@ class StatBreakdownCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: ExpansionTile(
-        title: Text(label),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label),
+            Text(
+              '$base pontos investidos',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -37,11 +46,11 @@ class StatBreakdownCard extends StatelessWidget {
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
-          _row('Base', base),
+          _row('Pontos investidos', base),
           for (final modifier in modifiers)
             _row(modifier.sourceName, modifier.value.round()),
           const Divider(),
-          _row('Total', total, bold: true),
+          _row('Valor atual', total, bold: true),
         ],
       ),
     );
@@ -58,7 +67,7 @@ class StatBreakdownCard extends StatelessWidget {
           ),
         ),
         Text(
-          '${value >= 0 && name != 'Base' && name != 'Total' ? '+' : ''}$value',
+          '${value >= 0 && name != 'Pontos investidos' && name != 'Valor atual' ? '+' : ''}$value',
         ),
       ],
     ),

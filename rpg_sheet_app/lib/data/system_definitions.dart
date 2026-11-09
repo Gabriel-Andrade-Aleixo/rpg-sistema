@@ -155,8 +155,9 @@ const races = <RaceDefinition>[
 const defaultDefense = FormulaDefinition(
   label: 'Defesa padrao',
   components: [
-    WeightedAttribute(AttributeId.dexterity, .70),
-    WeightedAttribute(AttributeId.constitution, .30),
+    WeightedAttribute(AttributeId.dexterity, .40),
+    WeightedAttribute(AttributeId.constitution, .40),
+    WeightedAttribute(AttributeId.intelligence, .20),
   ],
 );
 

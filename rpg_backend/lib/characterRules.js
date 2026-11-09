@@ -1,13 +1,14 @@
 import { normalizeText, normalizeVisibility } from './catalogStore.js';
+import { EXPERIENCE_SYSTEM_VERSION, migrateExperienceSystem } from './experienceRules.js';
 
 const attributeIds = ['strength', 'dexterity', 'constitution', 'intelligence', 'charisma', 'faith'];
 const resourceLimits = {
   humanity: [0, 100], divinity: [0, 100], corruption: [0, 100],
-  deathSuccesses: [0, 3], deathFailures: [0, 3], dead: [0, 1], luck: [-100, 100],
+  deathSuccesses: [0, 3], deathFailures: [0, 3], dead: [0, 1], luck: [0, 3],
 };
 
 export function validateAndNormalizeCharacter(raw, catalog) {
-  const character = structuredClone(raw || {});
+  const character = migrateExperienceSystem(raw);
   const errors = [];
   const entries = Array.isArray(catalog?.entries) ? catalog.entries : [];
   const race = entries.find((entry) => entry.id === character.raceId);
@@ -65,9 +66,9 @@ export function validateAndNormalizeCharacter(raw, catalog) {
   }
   character.currentHp = boundedInteger(character.currentHp, 0, character.maxHp, 'Vida atual', errors);
 
-  const maximumMana = evaluateFormula(classRules.mana, character.attributes, attributeBonuses);
-  if (classRules.mana) character.maxMana = maximumMana;
-  else character.maxMana = boundedInteger(character.maxMana, 0, 100000, 'Mana máxima', errors);
+  const manaFormula = classRules.mana || { base: 5, terms: { intelligence: 1, constitution: .5 } };
+  const maximumMana = evaluateFormula(manaFormula, character.attributes, attributeBonuses) + Math.max(0, character.level - 1);
+  character.maxMana = maximumMana;
   character.currentMana = boundedInteger(character.currentMana, 0, character.maxMana, 'Mana atual', errors);
 
   character.combatContext = normalizeCombatContext(character.combatContext);
@@ -76,14 +77,19 @@ export function validateAndNormalizeCharacter(raw, catalog) {
   character.currency = normalizeCurrency(character.currency, errors);
   character.classXp = boundedInteger(character.classXp, 0, 1000000, 'XP de Classe', errors);
   character.classXpTotal = boundedInteger(character.classXpTotal, 0, 1000000, 'XP total de Classe', errors);
-  character.combatXp = boundedInteger(character.combatXp, 0, 1000000, 'XP de combate', errors);
+  character.developmentXp = boundedInteger(character.developmentXp, 0, 1000000, 'XP de Desenvolvimento', errors);
+  character.developmentPoints = boundedInteger(character.developmentPoints, 0, 1000000, 'Pontos de Desenvolvimento', errors);
+  character.developmentAttributeBonuses = normalizeAttributeBonuses(character.developmentAttributeBonuses, 'Bônus de Desenvolvimento', errors);
+  character.developmentSkillBonuses = normalizeExperienceMap(character.developmentSkillBonuses, errors);
+  character.combatXp = 0;
   character.skillPoints = boundedInteger(character.skillPoints, 0, 10000, 'Pontos de habilidade', errors);
   character.classPoints = boundedInteger(character.classPoints, 0, 10000, 'Pontos de classe', errors);
   character.visibility = normalizeVisibility(character.visibility || character.isPrivate);
   character.isPrivate = character.visibility === 'private';
   character.imageUrl = normalizeImageUrl(character.imageUrl, 'Imagem do personagem', errors);
   character.spells = Array.isArray(character.spells) ? character.spells.slice(0, 300) : [];
-  character.areaExperience = normalizeExperienceMap(character.areaExperience, errors);
+  character.areaExperience = {};
+  character.xpSystemVersion = EXPERIENCE_SYSTEM_VERSION;
 
   if (errors.length) throw validationError(errors);
 
@@ -142,8 +148,7 @@ function collectAttributeBonuses(character, race, variant, characterClass, catal
     }
   }
   for (const item of character.equipment || []) {
-    const rules = rulesOf(catalogById.get(item.catalogId));
-    for (const modifier of rules.modifiers || []) {
+    for (const modifier of itemModifiers(item, catalogById)) {
       if (modifier.targetType === 'attribute' && attributeIds.includes(modifier.targetId)) {
         result[modifier.targetId] += Number(modifier.value || 0);
       }
@@ -160,20 +165,75 @@ function addAttributes(target, values) {
 
 function validateInventory(values, catalogById, label, errors) {
   if (!Array.isArray(values)) return [];
-  return values.slice(0, 500).filter((item) => {
+  const ids = new Set();
+  return values.slice(0, 500).map((raw, index) => {
+    const item = raw && typeof raw === 'object' ? raw : {};
     const entry = catalogById.get(item?.catalogId)
       || [...catalogById.values()].find((candidate) => (
         ['itens', 'equipamentos'].includes(normalizeText(candidate.category))
         && normalizeText(candidate.name) === normalizeText(item?.name)
       ));
-    const allowed = entry && ['itens', 'equipamentos'].includes(normalizeText(entry.category));
-    if (!allowed) errors.push(`Existe um item não oficial no ${label}.`);
-    if (allowed) item.catalogId = entry.id;
-    return allowed;
-  }).map((item) => ({
-    ...item,
-    quantity: boundedInteger(item.quantity ?? 1, 1, 9999, `Quantidade de ${item.name || 'item'}`, errors),
-  }));
+    const official = entry && ['itens', 'equipamentos'].includes(normalizeText(entry.category));
+    const id = boundedText(item.id, 140);
+    const name = boundedText(official ? (item.name || entry.name) : item.name, 120);
+    if (!id || ids.has(id)) errors.push(`O item ${index + 1} do ${label} possui identificador inválido ou repetido.`);
+    ids.add(id);
+    if (!name) errors.push(`Informe o nome do item ${index + 1} do ${label}.`);
+
+    const bonus = boundedText(item.bonus, 160);
+    if (!official && bonus) parseCustomItemModifiers({ ...item, id, name, bonus }, errors);
+
+    return {
+      id,
+      catalogId: official ? entry.id : '',
+      name,
+      type: boundedText(official ? (item.type || entry.category) : (item.type || 'Item personalizado'), 80),
+      description: boundedText(item.description, 2000),
+      weight: boundedNumber(item.weight, 0, 100000, `Peso de ${name || 'item'}`, errors),
+      quantity: boundedInteger(item.quantity ?? 1, 1, 9999, `Quantidade de ${name || 'item'}`, errors),
+      bonus,
+      notes: boundedText(item.notes, 500),
+      imageUrl: normalizeImageUrl(item.imageUrl, `Imagem de ${name || 'item'}`, errors),
+      requirements: boundedText(item.requirements, 500),
+    };
+  });
+}
+
+function itemModifiers(item, catalogById) {
+  const entry = catalogById.get(item?.catalogId);
+  return entry ? (rulesOf(entry).modifiers || []) : parseCustomItemModifiers(item);
+}
+
+function parseCustomItemModifiers(item, errors = null) {
+  const bonus = String(item?.bonus || '').trim();
+  if (!bonus) return [];
+  const aliases = new Map([
+    ['forca', ['attribute', 'strength']], ['strength', ['attribute', 'strength']],
+    ['destreza', ['attribute', 'dexterity']], ['dexterity', ['attribute', 'dexterity']],
+    ['constituicao', ['attribute', 'constitution']], ['constitution', ['attribute', 'constitution']],
+    ['inteligencia', ['attribute', 'intelligence']], ['intelligence', ['attribute', 'intelligence']],
+    ['carisma', ['attribute', 'charisma']], ['charisma', ['attribute', 'charisma']],
+    ['fe', ['attribute', 'faith']], ['faith', ['attribute', 'faith']],
+    ['defesa', ['stat', 'defense']], ['defense', ['stat', 'defense']],
+    ['ca', ['stat', 'armorClass']], ['classe de armadura', ['stat', 'armorClass']],
+    ['armor class', ['stat', 'armorClass']],
+  ]);
+  const result = [];
+  for (const fragment of bonus.split(/[;\n]+/).map((value) => value.trim()).filter(Boolean).slice(0, 4)) {
+    const match = fragment.match(/^(.+?)\s*[:=]\s*([+-]?\d+)$/);
+    const target = match ? aliases.get(normalizeText(match[1])) : null;
+    const value = match ? Number(match[2]) : 0;
+    if (!target || !Number.isInteger(value) || value === 0 || Math.abs(value) > 20) {
+      errors?.push(`O bônus de ${item?.name || 'item personalizado'} é inválido. Use, por exemplo, "Defesa: +2".`);
+      continue;
+    }
+    result.push({
+      targetType: target[0],
+      targetId: target[1],
+      value,
+    });
+  }
+  return result;
 }
 
 function validateLevelHistory(values, level, errors) {
@@ -207,6 +267,9 @@ function normalizeResources(raw, classRules, attributes, bonuses, errors) {
     result[name] = boundedInteger(result[name] ?? (name === 'humanity' ? 100 : 0), limits[0], limits[1], name, errors);
   }
   result.divinity = 100 - result.humanity;
+  result.pendingLuckBonus = boundedInteger(result.pendingLuckBonus ?? 0, 0, 1, 'Bônus pendente de Sorte', errors);
+  result.infusionsThisTurn = boundedInteger(result.infusionsThisTurn ?? 0, 0, 4, 'Infusões no turno', errors);
+  result.spectralInfusionUsedThisTurn = result.spectralInfusionUsedThisTurn === true || result.spectralInfusionUsedThisTurn === 1 ? 1 : 0;
   for (const resource of classRules.resources || []) {
     if (!resource.id || !resource.maximum) continue;
     const maximum = evaluateFormula(resource.maximum, attributes, bonuses);
@@ -266,6 +329,12 @@ function validateCombatTechniques(values, classRules, combatContext, errors) {
     const cooldownTurns = costType === 'cooldown'
       ? boundedInteger(raw?.cooldownTurns, 1, 99, `Recarga de ${name || 'técnica'}`, errors)
       : 0;
+    const learningState = ['unlearned', 'partial', 'mastered'].includes(raw?.learningState)
+      ? raw.learningState
+      : 'unlearned';
+    const trainingSuccesses = boundedInteger(raw?.trainingSuccesses, 0, 3, `Sucessos de aprendizado de ${name || 'técnica'}`, errors);
+    const executionSuccesses = boundedInteger(raw?.executionSuccesses, 0, 3, `Sucessos de execução de ${name || 'técnica'}`, errors);
+    const masteryTrainingSuccesses = boundedInteger(raw?.masteryTrainingSuccesses, 0, 5, `Sucessos de domínio de ${name || 'técnica'}`, errors);
     return {
       id,
       name,
@@ -274,6 +343,15 @@ function validateCombatTechniques(values, classRules, combatContext, errors) {
       training: boundedText(raw?.training, 500),
       costType,
       cooldownTurns,
+      learningDifficulty: boundedInteger(raw?.learningDifficulty ?? 15, 1, 30, `CD de aprendizado de ${name || 'técnica'}`, errors),
+      executionDifficulty: boundedInteger(raw?.executionDifficulty ?? 10, 1, 29, `CD de execução de ${name || 'técnica'}`, errors),
+      trainingSuccesses,
+      executionSuccesses,
+      masteryTrainingSuccesses,
+      trainingHours: boundedInteger(raw?.trainingHours, 0, 100000, `Horas de treino de ${name || 'técnica'}`, errors),
+      learningState: learningState === 'mastered'
+        ? 'mastered'
+        : (trainingSuccesses >= 3 ? (executionSuccesses >= 3 || masteryTrainingSuccesses >= 5 ? 'mastered' : 'partial') : 'unlearned'),
       cooldownRemaining: combatContext.inCombat && costType === 'cooldown'
         ? boundedInteger(raw?.cooldownRemaining, 0, cooldownTurns, `Recarga restante de ${name || 'técnica'}`, errors)
         : 0,
@@ -318,7 +396,7 @@ function calculateDerivedStats(character, race, variant, characterClass, catalog
   let defense = evaluateFormula(defenseFormula, character.attributes, bonuses);
   let armorClassBonus = Number(race.statBonuses?.armorClass || 0) + Number(variant?.statBonuses?.armorClass || 0);
   for (const item of character.equipment || []) {
-    for (const modifier of rulesOf(catalogById.get(item.catalogId)).modifiers || []) {
+    for (const modifier of itemModifiers(item, catalogById)) {
       if (modifier.targetType !== 'stat') continue;
       if (modifier.targetId === 'defense') defense += Number(modifier.value || 0);
       if (['armorClass', 'armorclass'].includes(modifier.targetId)) armorClassBonus += Number(modifier.value || 0);
@@ -391,6 +469,15 @@ function boundedInteger(value, minimum, maximum, label, errors) {
   if (!Number.isInteger(number) || number < minimum || number > maximum) {
     errors.push(`${label} precisa estar entre ${minimum} e ${maximum}.`);
     return Math.max(minimum, Math.min(maximum, Number.isFinite(number) ? Math.round(number) : minimum));
+  }
+  return number;
+}
+
+function boundedNumber(value, minimum, maximum, label, errors) {
+  const number = Number(value ?? 0);
+  if (!Number.isFinite(number) || number < minimum || number > maximum) {
+    errors.push(`${label} precisa estar entre ${minimum} e ${maximum}.`);
+    return Math.max(minimum, Math.min(maximum, Number.isFinite(number) ? number : minimum));
   }
   return number;
 }

@@ -64,7 +64,7 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   const solarSpell = page.locator('.spellList article').filter({ hasText: 'Sentença Solar' });
   await expect(solarSpell).toContainText('1d8 + Fé');
   await solarSpell.getByRole('button', { name: 'Usar com sucesso' }).click();
-  await expect(page.locator('.spellResources .metric').filter({ hasText: 'Mana' })).toContainText('19/31');
+  await expect(page.locator('.spellResources .metric').filter({ hasText: 'Mana' })).toContainText('19/35');
   await expect(page.locator('.spellResources .metric').filter({ hasText: 'Humanidade' })).toContainText('97');
   await solarSpell.getByRole('button', { name: 'Organizar tópico' }).click();
   await solarSpell.getByLabel('Tópico de Sentença Solar').fill('Favoritas');
@@ -76,7 +76,7 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await expect(magicArrow).toContainText('2d4');
   await page.getByLabel('Resultado dos 2d4').fill('7');
   await page.locator('.spellList article').filter({ hasText: 'Infusão: Impacto' }).getByRole('button', { name: 'Usar com sucesso' }).click();
-  await expect(page.locator('.spellResources .metric').filter({ hasText: 'Mana' })).toContainText('18/31');
+  await expect(page.locator('.spellResources .metric').filter({ hasText: 'Mana' })).toContainText('18/35');
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('grimorio-mobile.png'), fullPage: true });
@@ -86,15 +86,41 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await page.getByRole('button', { name: 'Rolar d20' }).click();
   await expect(page.locator('.diceStage canvas')).toBeVisible();
   await expect(page.locator('.rollResultBlock')).toBeVisible({ timeout: 5000 });
-  await page.getByRole('button', { name: 'Fichas' }).click();
+  await page.locator('.sidebar .mainNav').getByRole('button', { name: 'Fichas', exact: true }).click();
 
-  await page.getByRole('button', { name: 'Combate' }).click();
+  await page.getByRole('button', { name: 'Combate', exact: true }).click();
   await expect(page.getByText('Flecha Mágica e infusões')).toBeVisible();
   await expect(page.getByText('Infusão: Espectral')).toBeVisible();
 
   await page.getByRole('button', { name: 'Evolução' }).click();
-  await expect(page.getByLabel('Área de experiência')).toBeVisible();
-  await expect(page.getByLabel('Área de experiência').locator('option')).toHaveCount(7);
+  await expect(page.getByRole('heading', { name: 'XP de classe' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Subir para nível 6' })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Registrar cena' })).toBeVisible();
+  await expect(page.getByLabel('Contribuição').locator('option')).toHaveCount(4);
+  await expect(page.getByLabel('Atributo').locator('option')).toHaveCount(6);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Registrar XP de sessão' }).click();
+  await page.getByRole('button', { name: 'Total manual' }).click();
+  await page.getByLabel('XP ganho').fill('200');
+  await page.getByLabel('Origem / sessão').fill('Sessão E2E');
+  await page.getByRole('button', { name: 'Registrar 200 XP' }).click();
+  await expect(page.getByRole('button', { name: 'Subir para nível 6' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Subir para nível 6' }).click();
+  await expect(page.getByRole('heading', { name: 'Subir para nível 6' })).toBeVisible();
+  await expect(page.getByLabel('XP ganho')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+  await page.evaluate(() => window.scrollTo(0, 500));
+  const sheetNav = await page.getByRole('navigation', { name: 'Seções da ficha' }).boundingBox();
+  const siteNav = await page.locator('.sidebar').boundingBox();
+  expect(sheetNav.y + sheetNav.height).toBeLessThan(siteNav.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('evolucao-mobile.png') });
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const navBounds = await page.getByRole('navigation', { name: 'Seções da ficha' }).boundingBox();
+  const historyBounds = await page.getByRole('navigation', { name: 'Seções da ficha' }).getByRole('button', { name: 'História' }).boundingBox();
+  expect(historyBounds.x + historyBounds.width).toBeLessThanOrEqual(navBounds.x + navBounds.width + 1);
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.getByRole('button', { name: 'História' }).click();
   await expect(page.getByText('Protege as rotas entre as ilhas flutuantes.')).toBeVisible();
@@ -102,16 +128,26 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await expect(page.getByText('Combatente de longa distância que usa flechas mágicas.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Itens' }).click();
-  await expect(page.getByText('Adicionar item personalizado')).toHaveCount(0);
+  const customItem = page.locator('.customItemCreator');
+  await customItem.getByText('Criar item personalizado').click();
+  await customItem.getByLabel('Nome').fill('Bracelete do Vento');
+  await customItem.getByLabel('Tipo').selectOption('Acessório');
+  await customItem.getByLabel('Bônus ao equipar').selectOption('defense');
+  await customItem.getByLabel('Valor do bônus').fill('2');
+  await customItem.getByLabel('Criar já equipado').check();
+  await customItem.getByRole('button', { name: 'Criar item' }).click();
+  await expect(page.locator('.inventoryList').filter({ hasText: 'Bracelete do Vento' })).toBeVisible();
   await page.getByText('Adicionar item existente').click();
   await page.getByLabel('Buscar no catálogo').fill('Armadura de Couro');
   await page.locator('.catalogItemPicker article').filter({ hasText: 'Armadura de Couro' }).getByRole('button', { name: 'Adicionar' }).click();
   await expect(page.getByText('Armadura de Couro').last()).toBeVisible();
-  await page.getByRole('button', { name: 'Equipar' }).click();
+  await page.getByRole('button', { name: 'Equipar', exact: true }).click();
 
   await page.getByRole('button', { name: 'Resumo' }).click();
-  await expect(page.locator('.metric').filter({ hasText: 'Defesa' }).getByText('5', { exact: true })).toBeVisible();
-  await expect(page.locator('.metric').filter({ hasText: 'CA' }).getByText('15', { exact: true })).toBeVisible();
+  await expect(page.locator('.metric').filter({ hasText: 'Defesa' }).getByText('7', { exact: true })).toBeVisible();
+  await expect(page.locator('.metric').filter({ hasText: 'CA' }).getByText('17', { exact: true })).toBeVisible();
+  await expect(page.getByText('Soma bruta: 4,2 → floor = 4')).toBeVisible();
+  await expect(page.getByText('CA: 10 + 7 + 0 = 17')).toBeVisible();
 
   await page.getByRole('button', { name: 'Mestre' }).click();
   await page.locator('.adminTabs').getByRole('button', { name: /Itens/ }).click();
@@ -119,4 +155,27 @@ test('seleciona personagem e navega pelas áreas organizadas da ficha', async ({
   await page.getByLabel('Nome').fill('Luva do Mestre');
   await page.getByRole('button', { name: 'Criar item' }).click();
   await expect(page.getByText('Item criado na biblioteca oficial.')).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addStyleTag({ content: 'nextjs-portal { pointer-events: none !important; }' });
+  await page.locator('.sidebar .mainNav').getByRole('button', { name: 'Fichas', exact: true }).click();
+  await page.locator('.mobileNewCharacterButton').click();
+  await expect(page.locator('.topbar').getByRole('heading', { name: 'Criar personagem' })).toBeVisible();
+  await expect(page.locator('.mobileCharacterPicker')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Informe o nome do personagem.' })).toBeVisible();
+  await page.getByLabel('Nome do personagem').fill('Nova ficha');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.locator('.wizardContent').getByRole('heading', { name: 'Imagem' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Etapas da ficha' }).getByRole('button', { name: '3 Raça' }).click();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Selecione uma raça' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('criacao-mobile.png') });
+  await page.locator('.wizardSteps button').nth(9).evaluate((button) => button.click());
+  await expect(page.locator('.wizardContent').getByRole('heading', { name: 'História' })).toBeVisible();
+  const stepsBounds = await page.locator('.wizardSteps').boundingBox();
+  const activeStepBounds = await page.locator('.wizardSteps button.active').boundingBox();
+  expect(activeStepBounds.x).toBeGreaterThanOrEqual(stepsBounds.x - 1);
+  expect(activeStepBounds.x + activeStepBounds.width).toBeLessThanOrEqual(stepsBounds.x + stepsBounds.width + 1);
 });

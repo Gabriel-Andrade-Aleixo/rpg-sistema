@@ -66,8 +66,8 @@ void main() {
     const service = ClassActionService();
     final impact = ClassActionService.infusions[1];
     final spectral = ClassActionService.infusions[4];
-    expect(service.infusionDamage(impact, 8, 3).hit, 10);
-    expect(service.infusionDamage(spectral, 9, 0).miss, 3);
+    expect(service.infusionDamage(impact, 8, 3, 4).hit, 13);
+    expect(service.infusionDamage(spectral, 9, 0).miss, 0);
     expect(service.infusionManaCost(impact, 3, 3), 2);
   });
 

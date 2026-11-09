@@ -687,11 +687,9 @@ export function prepareCharacterForStorage(raw) {
   character.manualAbilities = compactStrings(character.manualAbilities, 200, 400);
   character.rollHistory = compactHistory(character.rollHistory, 30);
   character.levelHistory = compactHistory(character.levelHistory, 100);
-  character.classXpHistory = compactHistory(character.classXpHistory, 100);
-  character.experienceHistory = compactHistory(character.experienceHistory, 200);
-  character.humanityHistory = compactHistory(character.humanityHistory, 100);
-  character.corruptionHistory = compactHistory(character.corruptionHistory, 100);
-  character.actionHistory = compactHistory(character.actionHistory, 200);
+  for (const key of ['classXpHistory', 'experienceHistory', 'humanityHistory', 'corruptionHistory', 'actionHistory']) {
+    character[key] = Array.isArray(character[key]) ? character[key] : [];
+  }
   character.inventory = compactInventory(character.inventory);
   character.equipment = compactInventory(character.equipment);
   character.visibility = normalizeVisibility(character.visibility || character.isPrivate);

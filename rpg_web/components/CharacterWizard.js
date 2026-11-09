@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import RpgImage from './RpgImage';
 import StatBreakdown from './StatBreakdown';
 import { attributes } from '../lib/rpgData';
@@ -20,9 +20,11 @@ import {
 
 const steps = ['Dados', 'Imagem', 'Raça', 'Classe', 'Atributos', 'Proficiências', 'Vida', 'Equipamentos', 'Habilidades', 'História', 'Revisão'];
 
-export default function CharacterWizard({ initial, catalog, onSave, onCancel, requestRoll }) {
+export default function CharacterWizard({ initial, catalog, onSave, onCancel, onDirtyChange }) {
   const [draft, setDraft] = useState(() => migrateCharacter(initial, catalog));
   const [step, setStep] = useState(0);
+  const [showStepErrors, setShowStepErrors] = useState(false);
+  const stepsRef = useRef(null);
   const [query, setQuery] = useState('');
   const [initialHealthRoll, setInitialHealthRoll] = useState('');
   const groups = useMemo(() => catalogGroups(catalog), [catalog]);
@@ -32,8 +34,25 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
   const parsedClass = characterClass ? parseClass(characterClass) : null;
   const spentAttributes = spentInitialAttributePoints(draft.attributes);
 
+  useEffect(() => {
+    if (window.innerWidth <= 760) stepsRef.current?.querySelector('.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [step]);
+
   function update(changes) {
     setDraft((current) => recalculateCharacter({ ...current, ...changes }, catalog));
+    setShowStepErrors(false);
+    onDirtyChange?.(true);
+  }
+
+  function goToStep(next) {
+    setStep(next);
+    setShowStepErrors(false);
+    if (typeof window !== 'undefined' && window.innerWidth <= 760) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function advanceStep() {
+    if (stepErrors.length) { setShowStepErrors(true); return; }
+    goToStep(step + 1);
   }
 
   function updateAttribute(id, delta) {
@@ -77,10 +96,18 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
   }
 
   const validation = validateCharacter(draft, catalog);
+  const stepErrorTerms = {
+    0: ['nome do personagem'],
+    2: ['raça', 'variante', 'atributo versátil', 'conexão racial'],
+    3: ['classe'],
+    4: ['atributo', 'distribuição inicial'],
+    6: ['vida inicial'],
+  };
+  const stepErrors = validation.errors.filter((error) => (stepErrorTerms[step] || []).some((term) => error.toLowerCase().includes(term)));
   return (
     <div className="wizardLayout">
-      <nav className="wizardSteps" aria-label="Etapas da ficha">
-        {steps.map((label, index) => <button key={label} className={step === index ? 'active' : ''} onClick={() => setStep(index)}><span>{index + 1}</span>{label}</button>)}
+      <nav ref={stepsRef} className="wizardSteps" aria-label="Etapas da ficha">
+        {steps.map((label, index) => <button key={label} className={step === index ? 'active' : ''} aria-current={step === index ? 'step' : undefined} onClick={() => goToStep(index)}><span>{index + 1}</span>{label}</button>)}
       </nav>
       <section className="wizardContent panel">
         <div className="panelHeader"><div><span className="eyebrow">Etapa {step + 1} de {steps.length}</span><h2>{steps[step]}</h2></div><button className="ghostButton" onClick={onCancel}>Cancelar</button></div>
@@ -126,7 +153,7 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
             <button className={draft.hpProgressionMode === 'roll' ? 'active' : ''} disabled={!parsedClass?.hpPerLevelRollFormula} onClick={() => selectHealthMethod('roll')}>Rolagem d{parsedClass?.hitDie || '?'}</button>
             <button className={draft.hpProgressionMode === 'hybrid' ? 'active' : ''} disabled={!parsedClass?.hpPerLevelHybridFormula} onClick={() => selectHealthMethod('hybrid')}>Híbrido d{parsedClass?.hybridDie || '?'}</button>
           </div>
-          {draft.hpProgressionMode !== 'fixed' && <label>Resultado bruto do d{draft.hpProgressionMode === 'hybrid' ? parsedClass?.hybridDie : parsedClass?.hitDie}<input aria-label="Resultado do dado de vida no nível 1" type="number" min="1" max={draft.hpProgressionMode === 'hybrid' ? parsedClass?.hybridDie : parsedClass?.hitDie} value={initialHealthRoll} onChange={(event) => setInitialHealthRoll(event.target.value)} /></label>}
+          {draft.hpProgressionMode !== 'fixed' && <label>Resultado bruto do d{draft.hpProgressionMode === 'hybrid' ? parsedClass?.hybridDie : parsedClass?.hitDie}<input aria-label="Resultado do dado de vida no nível 1" type="number" min="1" max={draft.hpProgressionMode === 'hybrid' ? parsedClass?.hybridDie : parsedClass?.hitDie} value={initialHealthRoll} onChange={(event) => { setInitialHealthRoll(event.target.value); onDirtyChange?.(true); }} /></label>}
           <button className="primaryButton" disabled={!parsedClass || (draft.hpProgressionMode !== 'fixed' && !initialHealthRoll)} onClick={defineHealth}>Confirmar e calcular vida do nível 1</button>
           <div className="resourceHeadline"><strong>Vida registrada</strong><span>{draft.currentHp}/{draft.maxHp}</span></div>
           {!parsedClass && <Notice text="Selecione uma classe antes de definir a vida." />}
@@ -152,7 +179,8 @@ export default function CharacterWizard({ initial, catalog, onSave, onCancel, re
           <ValidationMessages validation={validation} />
         </div>}
 
-        <footer className="wizardFooter"><button className="ghostButton" disabled={step === 0} onClick={() => setStep((value) => value - 1)}>Voltar</button>{step < 10 ? <button className="primaryButton" onClick={() => setStep((value) => value + 1)}>Continuar</button> : <button className="primaryButton" disabled={!validation.isValid} onClick={submit}>Salvar ficha</button>}</footer>
+        {showStepErrors && stepErrors.map((message) => <p className="validationError" role="alert" key={message}>{message}</p>)}
+        <footer className="wizardFooter"><button className="ghostButton" disabled={step === 0} onClick={() => goToStep(step - 1)}>Voltar</button>{step < 10 ? <button className="primaryButton" onClick={advanceStep}>Continuar</button> : <button className="primaryButton" disabled={!validation.isValid} onClick={submit}>Salvar ficha</button>}</footer>
       </section>
     </div>
   );

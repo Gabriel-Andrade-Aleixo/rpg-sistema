@@ -32,8 +32,8 @@ test('infusão com 3 Cadência reduz PM e consome Foco', () => {
 test('flechas mágicas calculam dano e penalidade de múltiplos ataques', () => {
   const impact = spectralInfusions.find((item) => item.id === 'impact');
   const spectral = spectralInfusions.find((item) => item.id === 'spectral');
-  assert.deepEqual(infusionDamage(impact, 8, 3), { hit: 10, miss: 0 });
-  assert.deepEqual(infusionDamage(spectral, 9, 0), { hit: 9, miss: 3 });
+  assert.deepEqual(infusionDamage(impact, 8, 3, 4), { hit: 13, miss: 0, cadenceBonus: 4 });
+  assert.deepEqual(infusionDamage(spectral, 9, 0), { hit: 9, miss: 0, cadenceBonus: 0 });
   assert.equal(infusionManaCost(impact, 3, 3), 2);
 });
 
@@ -56,11 +56,11 @@ test('magia registra terceiro sucesso e desconta recursos', () => {
   assert.equal(result.character.resources.humanity, 97);
 });
 
-test('magia divina registra o bônus de Fé dividido por dois', () => {
+test('magia divina registra o bônus de 5% da Divindade', () => {
   const spell = { id: 'divine', name: 'Luz Julgadora', type: 'Divina', manaCost: 1, focusCost: 0, humanityCost: 0, successfulUses: 0 };
   const base = emptyCharacter();
   const character = { ...base, currentMana: 5, attributes: { ...base.attributes, faith: 7 }, resources: { ...base.resources, humanity: 40, divinity: 60 }, spells: [spell] };
   const result = useSpell(character, spell, true);
   assert.equal(result.damageBonus, 3);
-  assert.match(result.character.actionHistory[0].result, /Fé \/ 2/);
+  assert.match(result.character.actionHistory[0].result, /5% da Divindade/);
 });

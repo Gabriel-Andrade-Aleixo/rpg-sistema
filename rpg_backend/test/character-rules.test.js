@@ -47,16 +47,27 @@ test('backend recalcula a ficha Zenitti com CA 14 e recursos oficiais', () => {
   assert.equal(result.resources.focoMax, 6);
 });
 
-test('backend migra referência antiga pelo nome mas rejeita item personalizado', () => {
+test('backend migra referência antiga e aceita item personalizado seguro', () => {
   const legacy = zenitti();
   legacy.inventory = [{ id: 'owned', catalogId: 'trello-old', name: 'Espada curta', quantity: 1 }];
   assert.equal(validateAndNormalizeCharacter(legacy, catalog).inventory[0].catalogId, sword.id);
 
   const custom = zenitti();
-  custom.inventory = [{ id: 'custom', catalogId: '', name: 'Item inventado', quantity: 1 }];
+  custom.equipment = [
+    { id: 'item_custom', catalogId: '', name: 'Colete artesanal', type: 'Armadura', quantity: 1, bonus: 'Defesa: +2' },
+    { id: 'item_ring', catalogId: '', name: 'Anel de destreza', type: 'Acessório', quantity: 1, bonus: 'Destreza: +1' },
+  ];
+  const result = validateAndNormalizeCharacter(custom, catalog);
+  assert.equal(result.equipment[0].catalogId, '');
+  assert.equal(result.derivedStats.effectiveAttributes.dexterity, 5);
+  assert.equal(result.derivedStats.defense, 6);
+  assert.equal(result.derivedStats.armorClass, 16);
+
+  const invalid = zenitti();
+  invalid.inventory = [{ id: 'item_invalid', catalogId: '', name: 'Item inválido', quantity: 1, bonus: 'Virar invencível' }];
   assert.throws(
-    () => validateAndNormalizeCharacter(custom, catalog),
-    (error) => error.statusCode === 400 && error.details.errors.some((message) => message.includes('não oficial')),
+    () => validateAndNormalizeCharacter(invalid, catalog),
+    (error) => error.statusCode === 400 && error.details.errors.some((message) => message.includes('bônus')),
   );
 });
 

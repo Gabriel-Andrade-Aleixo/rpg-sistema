@@ -61,9 +61,15 @@ void main() {
         )
         .character;
     final techniqueId = character.techniques.single.id;
+    for (var index = 0; index < 3; index += 1) {
+      character = service
+          .recordTraining(character, techniqueId, succeeded: true)
+          .character;
+    }
+    expect(character.techniques.single.learningState, 'partial');
     character = service.setCombatState(character, true);
 
-    final used = service.use(character, techniqueId);
+    final used = service.use(character, techniqueId, executionSucceeded: true);
     expect(used.error, isEmpty);
     expect(used.character.techniques.single.cooldownRemaining, 2);
     expect(used.character.actionHistory.first.name, 'Golpe giratório');
@@ -83,7 +89,10 @@ void main() {
     expect(character.techniques.single.cooldownRemaining, 1);
     character = service.advanceTurn(character);
     expect(character.techniques.single.cooldownRemaining, 0);
-    expect(service.use(character, techniqueId).error, isEmpty);
+    expect(
+      service.use(character, techniqueId, executionSucceeded: true).error,
+      isEmpty,
+    );
 
     character = service.setCombatState(character, false);
     expect(character.techniques.single.cooldownRemaining, 0);

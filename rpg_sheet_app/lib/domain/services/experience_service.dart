@@ -59,8 +59,122 @@ abstract final class ClassXpRules {
 class ExperienceService {
   const ExperienceService();
 
-  int classXpRequired(int currentLevel) =>
-      currentLevel >= 10 ? 75 : (currentLevel < 5 ? 20 : 40);
+  int classXpRequired(int currentLevel) => const {
+    1: 10,
+    2: 15,
+    3: 20,
+    4: 25,
+    5: 30,
+    6: 35,
+    7: 45,
+    8: 50,
+    9: 55,
+    10: 75,
+  }[currentLevel.clamp(1, 10)]!;
+
+  int developmentAttributeCost(int currentValue) {
+    if (currentValue <= 5) return 1;
+    if (currentValue <= 10) return 2;
+    return 5;
+  }
+
+  Character registerDevelopmentXp(
+    Character character,
+    int amount,
+    String description,
+  ) {
+    final safeAmount = amount.clamp(1, 4);
+    final total = character.developmentXp + safeAmount;
+    final earnedPoints = total ~/ 20;
+    return character.copyWith(
+      developmentXp: total % 20,
+      developmentPoints: character.developmentPoints + earnedPoints,
+      experienceHistory: [
+        if (earnedPoints > 0)
+          _record(
+            'conversion',
+            -(earnedPoints * 20),
+            '${earnedPoints * 20} XP convertidos automaticamente em $earnedPoints PD',
+          ),
+        _record(
+          'development',
+          safeAmount,
+          description.trim().isEmpty ? 'Cena relevante' : description.trim(),
+        ),
+        ...character.experienceHistory,
+      ],
+    );
+  }
+
+  Character convertDevelopmentXp(Character character) {
+    if (character.developmentXp < 20) return character;
+    final earnedPoints = character.developmentXp ~/ 20;
+    return character.copyWith(
+      developmentXp: character.developmentXp % 20,
+      developmentPoints: character.developmentPoints + earnedPoints,
+      experienceHistory: [
+        _record(
+          'conversion',
+          -(earnedPoints * 20),
+          '${earnedPoints * 20} XP convertidos em $earnedPoints PD',
+        ),
+        ...character.experienceHistory,
+      ],
+    );
+  }
+
+  Character spendDevelopmentOnAttribute(
+    Character character,
+    AttributeId attribute,
+    int effectiveValue,
+  ) {
+    final cost = developmentAttributeCost(effectiveValue);
+    if (effectiveValue >= 20 || character.developmentPoints < cost) {
+      return character;
+    }
+    final permanent = Map<AttributeId, int>.of(
+      character.permanentAttributeBonuses,
+    )..[attribute] = (character.permanentAttributeBonuses[attribute] ?? 0) + 1;
+    final development =
+        Map<AttributeId, int>.of(character.developmentAttributeBonuses)
+          ..[attribute] =
+              (character.developmentAttributeBonuses[attribute] ?? 0) + 1;
+    return character.copyWith(
+      developmentPoints: character.developmentPoints - cost,
+      permanentAttributeBonuses: permanent,
+      developmentAttributeBonuses: development,
+      experienceHistory: [
+        _record(
+          'development_spend',
+          -cost,
+          '+1 permanente em ${attribute.label}',
+        ),
+        ...character.experienceHistory,
+      ],
+    );
+  }
+
+  Character spendDevelopmentOnSkill(
+    Character character,
+    String skillId,
+    String skillName,
+  ) {
+    final spent = character.developmentSkillBonuses[skillId] ?? 0;
+    if (character.developmentPoints < 1 || spent >= 5) return character;
+    final bonuses = Map<String, int>.of(character.skillBonuses)
+      ..[skillId] = (character.skillBonuses[skillId] ?? 0) + 1;
+    final development = Map<String, int>.of(character.developmentSkillBonuses)
+      ..[skillId] = spent + 1;
+    return character.copyWith(
+      developmentPoints: character.developmentPoints - 1,
+      skillBonuses: bonuses,
+      developmentSkillBonuses: development,
+      experienceHistory: [
+        _record('development_spend', -1, '+1 permanente em $skillName'),
+        ...character.experienceHistory,
+      ],
+    );
+  }
 
   Character registerClassXp(
     Character character,

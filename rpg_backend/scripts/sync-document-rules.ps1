@@ -1,5 +1,5 @@
 param(
-  [string]$DocumentPath = (Join-Path $PSScriptRoot '..\..\RPG SISTEMA.docx')
+  [string]$DocumentPath = (Join-Path $PSScriptRoot '..\..\RPG SISTEMA V0.3.docx')
 )
 
 $ErrorActionPreference = 'Stop'

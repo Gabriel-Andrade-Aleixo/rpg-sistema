@@ -18,7 +18,7 @@ class EquipmentCalculator {
               CatalogEntry(
                 id: item.id,
                 name: item.name,
-                description: '${item.description}\n${item.bonus}',
+                description: item.bonus,
                 category: item.type,
                 imageUrl: item.imageUrl,
               ),

@@ -99,8 +99,22 @@ class CharacterCalculator {
 
   int maxMana(Character character) {
     final mana = classById(character.classId).mana;
-    if (mana == null) return 0;
-    return max(0, evaluateFormula(mana, effectiveAttributes(character)));
+    final formula =
+        mana ??
+        const FormulaDefinition(
+          label: 'Mana geral',
+          base: 5,
+          components: [
+            WeightedAttribute(AttributeId.intelligence, 1),
+            WeightedAttribute(AttributeId.constitution, .5),
+          ],
+        );
+    return max(
+      0,
+      evaluateFormula(formula, effectiveAttributes(character)) +
+          character.level -
+          1,
+    );
   }
 
   int resourceMax(Character character, ResourceDefinition resource) {

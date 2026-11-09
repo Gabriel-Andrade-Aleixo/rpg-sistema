@@ -45,7 +45,7 @@ const classRules = [
     expected: { defense: 3, initialHp: 32, fixedHp: 12, rollBonus: 4, hybridBonus: 10, level10: { strength: 10, constitution: 7 } },
   },
   {
-    name: 'Mago', id: 'mage', defense: formula(0, { dexterity: .7, constitution: .3 }),
+    name: 'Mago', id: 'mage', defense: formula(0, { dexterity: .4, constitution: .4, intelligence: .2 }),
     hp: hp(formula(10, { constitution: 3 }), formula(7, { constitution: 1 }), { die: 8, ...formula(0, { constitution: 1 }) }, { die: 6, ...formula(3, { constitution: 1 }) }),
     mana: formula(10, { intelligence: 3 }), progression: [progression(1, 10, { intelligence: 1 })],
     expected: { defense: 3, initialHp: 22, fixedHp: 11, rollBonus: 4, hybridBonus: 7, mana: 25, level10: { intelligence: 10 } },
@@ -220,7 +220,7 @@ test('armadura equipada aumenta Defesa e CA e desequipada remove o bônus', () =
 test('item personalizado aplica bônus somente quando equipado', () => {
   const race = { id: 'race', name: 'Raça', category: 'Racas', description: '<!-- RPG_RULES_JSON_START -->\n{"type":"race"}\n<!-- RPG_RULES_JSON_END -->' };
   const archer = entryFor(classRules.find((item) => item.id === 'spectral_archer'));
-  const custom = { id: 'custom', catalogId: '', name: 'Colete artesanal', type: 'Armadura', bonus: 'Defesa: +2' };
+  const custom = { id: 'custom', catalogId: '', name: 'Colete artesanal', type: 'Armadura', description: 'Uma descrição narrativa que cita Defesa: +20.', bonus: 'Defesa: +2' };
   const base = { ...emptyCharacter(), raceId: race.id, classId: archer.id };
   const stored = recalculateCharacter({ ...base, inventory: [custom] }, { entries: [race, archer] });
   const equipped = recalculateCharacter({ ...base, equipment: [custom] }, { entries: [race, archer] });
@@ -228,9 +228,9 @@ test('item personalizado aplica bônus somente quando equipado', () => {
 });
 
 test('limites, custos e validação de classe incompleta são aplicados', () => {
-  assert.deepEqual([0, 4, 5, 9, 10].map(attributePointCost), [1, 1, 2, 2, 5]);
+  assert.deepEqual([0, 5, 6, 10, 11].map(attributePointCost), [1, 1, 2, 2, 5]);
   assert.equal(spentInitialAttributePoints({ strength: 6, dexterity: 4 }), 10);
-  assert.deepEqual([1, 4, 5, 9, 10].map(classXpRequired), [20, 20, 40, 40, 75]);
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(classXpRequired), [10, 15, 20, 25, 30, 35, 45, 50, 55, 75]);
   assert.equal(attributeBreakdown({ attributes: { faith: 40 }, modifiers: [] }, 'faith').total, 20);
 
   const incompleteClass = { id: 'fighter', name: 'Guerreiro', category: 'Classes', description: 'Sem metadados.' };
@@ -272,7 +272,7 @@ test('CD divina respeita faixa inicial e regra específica da classe', () => {
   assert.equal(humanityStatus(atEighty, { name: 'Paladino' }).difficulty, 15);
 });
 
-test('dano divino usa metade da Fé efetiva', () => {
+test('dano divino usa 5% da Divindade atual', () => {
   const base = emptyCharacter();
   const character = {
     ...base,
@@ -280,7 +280,7 @@ test('dano divino usa metade da Fé efetiva', () => {
     modifiers: [{ targetType: 'attribute', targetId: 'faith', value: 2 }],
     resources: { ...base.resources, humanity: 45, divinity: 55 },
   };
-  assert.equal(faithDamageBonus(character), 4);
+  assert.equal(faithDamageBonus(character), 2);
 });
 
 test('Ranger alterna a Defesa Adaptativa apenas com inimigo próximo', () => {

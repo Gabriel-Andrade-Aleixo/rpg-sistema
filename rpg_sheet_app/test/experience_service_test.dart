@@ -28,9 +28,11 @@ void main() {
     },
   );
 
-  test('XP de Classe usa custos de 20, 40 e 75', () {
-    expect(experience.classXpRequired(1), 20);
-    expect(experience.classXpRequired(5), 40);
+  test('XP de Classe usa a progressão da versão 0.3', () {
+    expect(experience.classXpRequired(1), 10);
+    expect(experience.classXpRequired(2), 15);
+    expect(experience.classXpRequired(5), 30);
+    expect(experience.classXpRequired(9), 55);
     expect(experience.classXpRequired(10), 75);
 
     final updated = experience.registerClassXp(character(), 12, 'Sessão 1');
@@ -39,24 +41,21 @@ void main() {
     expect(updated.classXpHistory.single.note, 'Sessão 1');
   });
 
-  test('XP de cena e combate respeita os limites por concessão', () {
-    var updated = experience.registerAreaXp(character(), 'Medicina', 9);
-    updated = experience.registerCombatXp(updated, 4, 9);
-
-    expect(updated.areaExperience['Medicina'], 4);
-    expect(updated.combatXp, 8);
-  });
-
-  test('20 XP de área convertem em bônus permanente de perícia', () {
-    var updated = character().copyWith(areaExperience: {'Medicina': 20});
-    updated = experience.convertAreaToSkill(
+  test('XP de Desenvolvimento converte em PD e compra perícia', () {
+    var updated = experience.registerDevelopmentXp(character(), 9, 'Combate');
+    expect(updated.developmentXp, 4);
+    updated = updated.copyWith(developmentXp: 20);
+    updated = experience.convertDevelopmentXp(updated);
+    expect(updated.developmentXp, 0);
+    expect(updated.developmentPoints, 1);
+    updated = experience.spendDevelopmentOnSkill(
       updated,
-      'Medicina',
       'skill-medicine',
+      'Medicina',
     );
-
-    expect(updated.areaExperience['Medicina'], 0);
+    expect(updated.developmentPoints, 0);
     expect(updated.skillBonuses['skill-medicine'], 1);
+    expect(updated.developmentSkillBonuses['skill-medicine'], 1);
   });
 
   test('perícia oficial usa pesos do cartão e arredonda para baixo', () {
@@ -109,7 +108,7 @@ void main() {
     final faithful = updated.copyWith(
       attributes: {...updated.attributes, AttributeId.faith: 7},
     );
-    expect(humanity.faithDamageBonus(faithful), 3);
+    expect(humanity.faithDamageBonus(faithful), 2);
 
     updated = humanity.restore(updated, 10, 'Intervenção do mestre');
     expect(humanity.humanity(updated), 55);

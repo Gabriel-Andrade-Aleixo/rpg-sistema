@@ -28,10 +28,10 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     ['Entradas oficiais', catalog.entries.length, 'library'],
     ['Itens e equipamentos', groups.items.length, 'items'],
     ['Magias', groups.spells.length, 'spells'],
-    ['Personagens', characters.length, 'characters'],
+    ['Minhas fichas', characters.length, 'characters'],
     ['Sem descrição', withoutDescription, 'description'],
     ['Sem imagem', withoutImage, 'images'],
-    ['Fichas inconsistentes', invalid, 'warning'],
+    ['Minhas fichas inconsistentes', invalid, 'warning'],
   ];
   const activeEntries = tab === 'spells' ? groups.spells : tab === 'catalog' ? catalog.entries : groups.items;
   const filtered = useMemo(() => activeEntries.filter((entry) => entry.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))), [activeEntries, search]);
@@ -39,6 +39,12 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   useEffect(() => {
     if (tab === 'ownership' && !adminCharacters.length && !directoryLoading) loadDirectory();
   }, [tab]);
+
+  function changeTab(next) {
+    setTab(next);
+    setSearch('');
+    setEditor(null);
+  }
 
   function beginCreate(kind) {
     setEditor({ kind, id: '', value: kind === 'spell' ? { ...emptySpell } : kind === 'generic' ? { ...emptyGeneric } : { ...emptyItem } });
@@ -104,6 +110,8 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   async function transfer(character) {
     const ownerUserId = ownerSelection[character.id] || character.ownerUserId || '';
     if (!ownerUserId || ownerUserId === character.ownerUserId) return;
+    const owner = adminUsers.find((user) => user.id === ownerUserId);
+    if (!window.confirm(`Transferir ${character.name || 'esta ficha'} para ${owner?.displayName || owner?.email || 'o usuário selecionado'}?`)) return;
     setSubmitting(true);
     setMessage('');
     try {
@@ -123,8 +131,10 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
     try {
       await onResetUserPassword(userId, password);
       setMessage('Senha redefinida. As sessões antigas do usuário foram encerradas.');
+      return true;
     } catch (error) {
       setMessage(error.message);
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -138,11 +148,11 @@ export default function AdminView({ catalog, characters, onRefresh, onSaveCatalo
   return <section className="viewPage adminWorkspace">
     <header className="viewHeader"><div><span className="eyebrow">Administração</span><h2>Biblioteca oficial</h2><p>Gerencie o conteúdo salvo no Supabase.</p></div><button className="ghostButton refreshButton" onClick={refresh}><RefreshCw aria-hidden="true" />Sincronizar</button></header>
     <nav className="adminTabs" aria-label="Áreas do modo mestre">
-      <button className={tab === 'overview' ? 'active' : ''} onClick={() => { setTab('overview'); setEditor(null); }}><LayoutDashboard aria-hidden="true" />Visão geral</button>
-      <button className={tab === 'items' ? 'active' : ''} onClick={() => { setTab('items'); setEditor(null); }}><Package aria-hidden="true" />Itens <span>{groups.items.length}</span></button>
-      <button className={tab === 'spells' ? 'active' : ''} onClick={() => { setTab('spells'); setEditor(null); }}><Sparkles aria-hidden="true" />Magias <span>{groups.spells.length}</span></button>
-      <button className={tab === 'catalog' ? 'active' : ''} onClick={() => { setTab('catalog'); setEditor(null); }}><Library aria-hidden="true" />Catálogo <span>{catalog.entries.length}</span></button>
-      <button className={tab === 'ownership' ? 'active' : ''} onClick={() => { setTab('ownership'); setEditor(null); }}><UserRoundCog aria-hidden="true" />Fichas <span>{adminCharacters.length || characters.length}</span></button>
+      <button className={tab === 'overview' ? 'active' : ''} onClick={() => changeTab('overview')}><LayoutDashboard aria-hidden="true" />Visão geral</button>
+      <button className={tab === 'items' ? 'active' : ''} onClick={() => changeTab('items')}><Package aria-hidden="true" />Itens <span>{groups.items.length}</span></button>
+      <button className={tab === 'spells' ? 'active' : ''} onClick={() => changeTab('spells')}><Sparkles aria-hidden="true" />Magias <span>{groups.spells.length}</span></button>
+      <button className={tab === 'catalog' ? 'active' : ''} onClick={() => changeTab('catalog')}><Library aria-hidden="true" />Catálogo <span>{catalog.entries.length}</span></button>
+      <button className={tab === 'ownership' ? 'active' : ''} onClick={() => changeTab('ownership')}><UserRoundCog aria-hidden="true" />Fichas <span>{adminCharacters.length || characters.length}</span></button>
     </nav>
     {message && <p className={/criado|atualizado|removido|transferida|redefinida/.test(message) ? 'noticeText adminMessage' : 'validationError adminMessage'}>{message}</p>}
     {tab === 'overview' ? <>
@@ -167,14 +177,12 @@ function OwnershipManager({ catalog, users, characters, ownerSelection, setOwner
     const haystack = [character.name, character.playerName, character.ownerName, character.ownerEmail].join(' ');
     return haystack.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'));
   }), [characters, query]);
-  useEffect(() => {
-    if (!passwordUserId && users[0]?.id) setPasswordUserId(users[0].id);
-  }, [users, passwordUserId]);
   async function submitPassword(event) {
     event.preventDefault();
     if (!passwordUserId || newPassword.length < 8) return;
-    await onResetPassword(passwordUserId, newPassword);
-    setNewPassword('');
+    const user = users.find((entry) => entry.id === passwordUserId);
+    if (!window.confirm(`Redefinir a senha de ${user?.email || 'este usuário'} e encerrar as sessões atuais?`)) return;
+    if (await onResetPassword(passwordUserId, newPassword)) setNewPassword('');
   }
   return <section className="ownershipPanel">
     <form className="adminPasswordPanel" onSubmit={submitPassword}>

@@ -173,6 +173,11 @@ class Character {
     this.classXp = 0,
     this.classXpTotal = 0,
     List<ClassXpRecord>? classXpHistory,
+    this.xpSystemVersion = 2,
+    this.developmentXp = 0,
+    this.developmentPoints = 0,
+    Map<AttributeId, int>? developmentAttributeBonuses,
+    Map<String, int>? developmentSkillBonuses,
     Map<String, int>? areaExperience,
     this.combatXp = 0,
     List<ExperienceRecord>? experienceHistory,
@@ -201,6 +206,8 @@ class Character {
        levelHistory = levelHistory ?? [],
        permanentAttributeBonuses = permanentAttributeBonuses ?? {},
        classXpHistory = classXpHistory ?? [],
+       developmentAttributeBonuses = developmentAttributeBonuses ?? {},
+       developmentSkillBonuses = developmentSkillBonuses ?? {},
        areaExperience = areaExperience ?? {},
        experienceHistory = experienceHistory ?? [],
        humanityHistory = humanityHistory ?? [],
@@ -251,6 +258,11 @@ class Character {
   final int classXp;
   final int classXpTotal;
   final List<ClassXpRecord> classXpHistory;
+  final int xpSystemVersion;
+  final int developmentXp;
+  final int developmentPoints;
+  final Map<AttributeId, int> developmentAttributeBonuses;
+  final Map<String, int> developmentSkillBonuses;
   final Map<String, int> areaExperience;
   final int combatXp;
   final List<ExperienceRecord> experienceHistory;
@@ -334,6 +346,13 @@ class Character {
     'classXp': classXp,
     'classXpTotal': classXpTotal,
     'classXpHistory': classXpHistory.map((item) => item.toJson()).toList(),
+    'xpSystemVersion': xpSystemVersion,
+    'developmentXp': developmentXp,
+    'developmentPoints': developmentPoints,
+    'developmentAttributeBonuses': developmentAttributeBonuses.map(
+      (key, value) => MapEntry(key.name, value),
+    ),
+    'developmentSkillBonuses': developmentSkillBonuses,
     'areaExperience': areaExperience,
     'combatXp': combatXp,
     'experienceHistory': experienceHistory
@@ -457,6 +476,22 @@ class Character {
             (item) => ClassXpRecord.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      xpSystemVersion: (json['xpSystemVersion'] as num?)?.toInt() ?? 0,
+      developmentXp: (json['developmentXp'] as num?)?.toInt() ?? 0,
+      developmentPoints: (json['developmentPoints'] as num?)?.toInt() ?? 0,
+      developmentAttributeBonuses: {
+        for (final entry
+            in ((json['developmentAttributeBonuses'] as Map?) ?? {}).entries)
+          if (AttributeId.values.any(
+            (item) => item.name == entry.key.toString(),
+          ))
+            AttributeId.values.firstWhere(
+              (item) => item.name == entry.key.toString(),
+            ): (entry.value as num?)?.toInt() ?? 0,
+      },
+      developmentSkillBonuses: Map<String, int>.from(
+        (json['developmentSkillBonuses'] as Map?) ?? {},
+      ),
       areaExperience: {
         for (final entry in ((json['areaExperience'] as Map?) ?? {}).entries)
           entry.key.toString(): entry.value is Map
@@ -549,6 +584,11 @@ class Character {
     int? classXp,
     int? classXpTotal,
     List<ClassXpRecord>? classXpHistory,
+    int? xpSystemVersion,
+    int? developmentXp,
+    int? developmentPoints,
+    Map<AttributeId, int>? developmentAttributeBonuses,
+    Map<String, int>? developmentSkillBonuses,
     Map<String, int>? areaExperience,
     int? combatXp,
     List<ExperienceRecord>? experienceHistory,
@@ -603,6 +643,13 @@ class Character {
     classXp: classXp ?? this.classXp,
     classXpTotal: classXpTotal ?? this.classXpTotal,
     classXpHistory: classXpHistory ?? List.of(this.classXpHistory),
+    xpSystemVersion: xpSystemVersion ?? this.xpSystemVersion,
+    developmentXp: developmentXp ?? this.developmentXp,
+    developmentPoints: developmentPoints ?? this.developmentPoints,
+    developmentAttributeBonuses:
+        developmentAttributeBonuses ?? Map.of(this.developmentAttributeBonuses),
+    developmentSkillBonuses:
+        developmentSkillBonuses ?? Map.of(this.developmentSkillBonuses),
     areaExperience: areaExperience ?? Map.of(this.areaExperience),
     combatXp: combatXp ?? this.combatXp,
     experienceHistory: experienceHistory ?? List.of(this.experienceHistory),

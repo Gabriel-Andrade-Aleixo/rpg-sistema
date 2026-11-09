@@ -15,6 +15,7 @@
     "sync:armors": "node scripts/sync-armors.js",
     "sync:spells": "node scripts/sync-divine-spells.js",
     "migrate:trello": "node scripts/migrate-trello-to-postgres.js",
+    "migrate:characters:v03": "node scripts/migrate-characters-v03.js",
     "audit:rules": "node scripts/audit-system-rules.js"
   },
   "engines": {

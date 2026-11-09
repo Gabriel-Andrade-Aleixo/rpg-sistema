@@ -9,7 +9,7 @@ test('detecta somente os campos persistentes alterados', () => {
   assert.deepEqual(changedCharacterFields(previous, next), ['currentHp']);
 });
 
-test('compacta históricos e remove modificadores calculados', () => {
+test('preserva históricos de campanha e limita apenas rolagens', () => {
   const compact = compactCharacter({
     id: '1',
     modifiers: [{ id: 'derived' }],
@@ -18,5 +18,5 @@ test('compacta históricos e remove modificadores calculados', () => {
   });
   assert.equal('modifiers' in compact, false);
   assert.equal(compact.rollHistory.length, 30);
-  assert.equal(compact.actionHistory.length, 30);
+  assert.equal(compact.actionHistory.length, 40);
 });

@@ -316,6 +316,7 @@ void main() {
       id: 'custom',
       name: 'Colete artesanal',
       type: 'Armadura',
+      description: 'Uma descrição narrativa que cita Defesa: +20.',
       bonus: 'Defesa: +2',
     );
     final base = Character(

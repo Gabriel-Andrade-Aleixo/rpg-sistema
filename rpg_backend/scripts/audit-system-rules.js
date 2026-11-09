@@ -28,7 +28,7 @@ const expectedClasses = {
   },
   Mago: {
     id: 'mage',
-    defense: f(0, { dexterity: .7, constitution: .3 }),
+    defense: f(0, { dexterity: .4, constitution: .4, intelligence: .2 }),
     hp: hp(f(10, { constitution: 3 }), f(7, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 6, ...f(3, { constitution: 1 }) }),
     mana: f(10, { intelligence: 3 }),
     attributeProgression: [p(1, 10, { intelligence: 1 })],
@@ -188,15 +188,18 @@ try {
   const experienceEntry = findEntry(systemEntries, 'Experiencia e Nivel');
   assert.ok(experienceEntry, 'Regra de XP ausente');
   assert.ok(normalize(experienceEntry.description).includes('participacao na sessao 1'), 'XP automático de participação ausente');
+  assert.ok(normalize(experienceEntry.description).includes('nivel 2 3 15 xp'), 'Custo de XP do nível 2 para 3 divergente');
+  assert.ok(normalize(experienceEntry.description).includes('xp de desenvolvimento'), 'XP de Desenvolvimento ausente');
+  assert.ok(normalize(experienceEntry.description).includes('20 xp o personagem recebe 1 ponto de desenvolvimento'), 'Conversão de XP em PD ausente');
   const corruptionEntry = findEntry(systemEntries, 'Corrupção e Magia Demoníaca');
   assert.ok(corruptionEntry, 'Regra de Corrupção ausente');
   assert.ok(normalize(corruptionEntry.description).includes('100 de corrupcao'), 'Faixa de 100 de Corrupção ausente');
   assert.ok(normalize(corruptionEntry.description).includes('manifestacao demoniaca'), 'Manifestação Demoníaca ausente');
   const techniquesEntry = findEntry(systemEntries, 'Técnicas de Combate Geral');
   assert.ok(techniquesEntry, 'Regra de Técnicas de Combate ausente');
-  assert.ok(normalize(techniquesEntry.description).includes('praticar fora de combate com treinamento'), 'Treinamento de técnicas fora de combate ausente');
-  assert.ok(normalize(techniquesEntry.description).includes('uso unico por combate'), 'Custo de uso único por combate ausente');
-  assert.ok(normalize(techniquesEntry.description).includes('esperar turnos pra usar de novo'), 'Recarga em turnos ausente');
+  assert.ok(normalize(techniquesEntry.description).includes('treina la fora de combate'), 'Treinamento de técnicas fora de combate ausente');
+  assert.ok(normalize(techniquesEntry.description).includes('uso limitado por combate'), 'Limite de uso por combate ausente');
+  assert.ok(normalize(techniquesEntry.description).includes('recarga em turnos'), 'Recarga em turnos ausente');
   assert.equal(metadataOf(techniquesEntry)?.learnOutsideCombatOnly, true, 'Metadados das Técnicas de Combate ausentes');
 
   const unsupported = classEntries
@@ -218,7 +221,7 @@ try {
 function loadSystemDocument() {
   const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
   const documentPath = process.env.RPG_SYSTEM_DOCUMENT
-    || path.resolve(scriptDirectory, '../../RPG SISTEMA.docx');
+    || path.resolve(scriptDirectory, '../../RPG SISTEMA V0.3.docx');
   if (!fs.existsSync(documentPath)) {
     throw new Error(`Documento oficial não encontrado: ${documentPath}`);
   }
@@ -243,8 +246,8 @@ function assertDocumentRules(text) {
     'barbaro', 'mago', 'arqueiro espectral', 'maestro tatico', 'clerigo',
     'paladino', 'ladino', 'ranger', 'bardo', 'lutador', 'thri-kreen',
     'vedalken', 'lizardfolk', 'genasi', 'bugbear', 'elfos',
-    'tecnicas de combate geral', 'praticar fora de combate com treinamento',
-    'dano base fe 2',
+    'tecnicas de combate geral', 'treina la fora de combate',
+    '5 da divindade atual',
     'defesa destreza 60 constituicao 30 inteligencia 10',
     'comecam o game com 1 em forca 1 em destreza e 1 em furtividade',
     'comecam o game com religiao 2',
