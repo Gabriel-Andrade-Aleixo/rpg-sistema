@@ -50,7 +50,7 @@ export function emptyCharacter() {
     classXp: 0,
     classXpTotal: 0,
     classXpHistory: [],
-    xpSystemVersion: 2,
+    xpSystemVersion: 3,
     developmentXp: 0,
     developmentPoints: 0,
     developmentAttributeBonuses: {},

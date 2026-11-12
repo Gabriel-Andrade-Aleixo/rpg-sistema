@@ -173,7 +173,7 @@ class Character {
     this.classXp = 0,
     this.classXpTotal = 0,
     List<ClassXpRecord>? classXpHistory,
-    this.xpSystemVersion = 2,
+    this.xpSystemVersion = 3,
     this.developmentXp = 0,
     this.developmentPoints = 0,
     Map<AttributeId, int>? developmentAttributeBonuses,

@@ -16,6 +16,7 @@ class DiceResultModal extends StatefulWidget {
     required this.sides,
     this.modifiers = const [],
     this.penalties = 0,
+    this.rollMode = 'normal',
   });
 
   final String characterId;
@@ -24,6 +25,7 @@ class DiceResultModal extends StatefulWidget {
   final int sides;
   final List<Modifier> modifiers;
   final int penalties;
+  final String rollMode;
 
   static Future<DiceRollRecord?> show(
     BuildContext context, {
@@ -33,6 +35,7 @@ class DiceResultModal extends StatefulWidget {
     required int sides,
     List<Modifier> modifiers = const [],
     int penalties = 0,
+    String rollMode = 'normal',
   }) => showDialog<DiceRollRecord>(
     context: context,
     barrierDismissible: false,
@@ -43,6 +46,7 @@ class DiceResultModal extends StatefulWidget {
       sides: sides,
       modifiers: modifiers,
       penalties: penalties,
+      rollMode: rollMode,
     ),
   );
 
@@ -76,6 +80,7 @@ class _DiceResultModalState extends State<DiceResultModal> {
       sides: widget.sides,
       modifiers: widget.modifiers,
       penalties: widget.penalties,
+      rollMode: widget.rollMode,
     );
     setState(() {
       _record = result;

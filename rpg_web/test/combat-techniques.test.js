@@ -56,6 +56,15 @@ test('oito treinos bem-sucedidos dominam uma técnica sem execução em combate'
   assert.equal(character.techniques[0].learningState, 'mastered');
 });
 
+test('encerrar combate limpa o estado do Espadachim sem alterar outros recursos', () => {
+  const character = { ...emptyCharacter(), resources: { hp: 12, swordsmanThreats: 3, swordsmanConcentration: 2, swordsmanDodgeUsed: 1, swordsmanOpeningUsed: 1 } };
+  const ended = setTechniqueCombatState(character, false);
+  assert.equal(ended.resources.hp, 12);
+  for (const key of ['swordsmanThreats', 'swordsmanConcentration', 'swordsmanDodgeUsed', 'swordsmanOpeningUsed']) {
+    assert.equal(ended.resources[key], 0);
+  }
+});
+
 test('classes sem Mana ou usuárias de armas podem aprender técnicas', () => {
   assert.equal(canLearnCombatTechniques({ manaFormula: null, usesWeapons: false }), true);
   assert.equal(canLearnCombatTechniques({ manaFormula: {}, usesWeapons: true }), true);

@@ -947,6 +947,86 @@ const classes = <CharacterClassDefinition>[
       ),
     ],
   ),
+  CharacterClassDefinition(
+    id: 'swordsman',
+    name: 'Espadachim',
+    description:
+        'Duelista que controla o espaço, lê aberturas e reage aos ataques.',
+    defense: FormulaDefinition(
+      label: 'Defesa',
+      components: [
+        WeightedAttribute(AttributeId.dexterity, .40),
+        WeightedAttribute(AttributeId.constitution, .40),
+        WeightedAttribute(AttributeId.intelligence, .20),
+      ],
+    ),
+    hp: HpFormulaDefinition(
+      initial: FormulaDefinition(
+        label: 'HP inicial',
+        base: 12,
+        components: [
+          WeightedAttribute(AttributeId.constitution, 3),
+          WeightedAttribute(AttributeId.dexterity, .5),
+        ],
+      ),
+      fixedPerLevel: '5 + Constituicao',
+      rollPerLevel: '1d8 + Constituicao',
+      hybridPerLevel: '4 + 1d4 + Constituicao',
+    ),
+    attributeProgression: [
+      'Niveis 1-3: +1 Destreza por nivel.',
+      'Niveis 4-10: +1 Destreza e +1 Constituicao por nivel.',
+    ],
+    abilities: [
+      AbilityDefinition(
+        level: 1,
+        name: 'Especializacao em Espada',
+        description:
+            '+1 no ataque com o tipo de espada escolhido; troca apos 8 horas de treino.',
+      ),
+      AbilityDefinition(
+        level: 2,
+        name: 'Esquiva Instintiva',
+        description:
+            'Uma vez por turno, testa Acrobacia contra o acerto recebido.',
+      ),
+      AbilityDefinition(
+        level: 3,
+        name: 'Ataque de Abertura',
+        description:
+            'Um contra-ataque por turno; em Concentração Dividida rola com desvantagem.',
+      ),
+      AbilityDefinition(
+        level: 4,
+        name: 'Leitura de Combate',
+        description: 'Amplia a Esquiva Instintiva em Concentração Total.',
+      ),
+      AbilityDefinition(
+        level: 5,
+        name: 'Contra-Ataque Duplo',
+        description:
+            'Ataque de Abertura passa a realizar dois ataques simples.',
+      ),
+      AbilityDefinition(
+        level: 7,
+        name: 'Tecnica Refinada',
+        description:
+            'Após 8 horas de treino, Destreza substitui Força no dano com a espada especializada.',
+      ),
+      AbilityDefinition(
+        level: 8,
+        name: 'Corte Duplo',
+        description:
+            'Em Concentração Total, o primeiro ataque do próprio turno pode realizar um segundo golpe.',
+      ),
+      AbilityDefinition(
+        level: 9,
+        name: 'Postura de Guarda',
+        description:
+            'Controla uma zona de 3 metros e pode interceptar uma vez por turno.',
+      ),
+    ],
+  ),
 ];
 
 RaceDefinition raceById(String id) =>

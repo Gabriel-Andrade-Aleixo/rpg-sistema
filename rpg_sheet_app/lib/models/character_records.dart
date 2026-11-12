@@ -61,6 +61,9 @@ class DiceRollRecord {
     required this.rawResult,
     required this.finalResult,
     required this.createdAt,
+    this.firstResult,
+    this.secondaryResult,
+    this.rollMode = 'normal',
     this.modifiers = const [],
     this.penalties = 0,
     this.origin = 'character_sheet',
@@ -73,6 +76,9 @@ class DiceRollRecord {
   final String die;
   final int rawResult;
   final int finalResult;
+  final int? firstResult;
+  final int? secondaryResult;
+  final String rollMode;
   final DateTime createdAt;
   final List<Modifier> modifiers;
   final int penalties;
@@ -80,7 +86,10 @@ class DiceRollRecord {
 
   String get formula {
     final bonus = modifiers.fold<num>(0, (sum, item) => sum + item.value);
-    return '$die ${bonus >= 0 ? '+' : '-'} ${bonus.abs()}${penalties == 0 ? '' : ' - $penalties'}';
+    final pair = secondaryResult == null
+        ? ''
+        : ' (${rollMode == 'disadvantage' ? 'desvantagem' : 'vantagem'}: ${firstResult ?? rawResult}, $secondaryResult)';
+    return '$die$pair ${bonus >= 0 ? '+' : '-'} ${bonus.abs()}${penalties == 0 ? '' : ' - $penalties'}';
   }
 
   Map<String, dynamic> toJson() => {
@@ -91,6 +100,9 @@ class DiceRollRecord {
     'die': die,
     'rawResult': rawResult,
     'finalResult': finalResult,
+    'firstResult': firstResult,
+    'secondaryResult': secondaryResult,
+    'rollMode': rollMode,
     'createdAt': createdAt.toIso8601String(),
     'modifiers': modifiers.map((item) => item.toJson()).toList(),
     'penalties': penalties,
@@ -105,6 +117,9 @@ class DiceRollRecord {
     die: json['die']?.toString() ?? 'd20',
     rawResult: (json['rawResult'] as num?)?.toInt() ?? 0,
     finalResult: (json['finalResult'] as num?)?.toInt() ?? 0,
+    firstResult: (json['firstResult'] as num?)?.toInt(),
+    secondaryResult: (json['secondaryResult'] as num?)?.toInt(),
+    rollMode: json['rollMode']?.toString() ?? 'normal',
     createdAt:
         DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
         DateTime.now(),

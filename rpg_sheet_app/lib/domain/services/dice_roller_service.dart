@@ -16,11 +16,18 @@ class DiceRollerService {
     List<Modifier> modifiers = const [],
     int penalties = 0,
     String origin = 'character_sheet',
+    String rollMode = 'normal',
   }) {
     if (![4, 6, 8, 10, 12, 20, 100].contains(sides)) {
       throw ArgumentError.value(sides, 'sides', 'Dado não suportado.');
     }
-    final raw = _random.nextInt(sides) + 1;
+    final first = _random.nextInt(sides) + 1;
+    final secondary = rollMode == 'normal' ? null : _random.nextInt(sides) + 1;
+    final raw = rollMode == 'disadvantage'
+        ? min(first, secondary!)
+        : rollMode == 'advantage'
+        ? max(first, secondary!)
+        : first;
     final bonus = modifiers.fold<int>(
       0,
       (sum, item) => sum + item.value.round(),
@@ -32,6 +39,9 @@ class DiceRollerService {
       name: name,
       die: 'd$sides',
       rawResult: raw,
+      firstResult: first,
+      secondaryResult: secondary,
+      rollMode: rollMode,
       finalResult: raw + bonus - penalties,
       modifiers: modifiers,
       penalties: penalties,

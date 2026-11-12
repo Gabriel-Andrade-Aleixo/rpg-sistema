@@ -594,7 +594,10 @@ export function metadataFromDescription(description) {
 export function replaceMetadataBlock(description, metadata) {
   const start = '<!-- RPG_RULES_JSON_START -->';
   const end = '<!-- RPG_RULES_JSON_END -->';
-  const clean = String(description || '').replace(new RegExp(`${start}[\\s\\S]*?${end}`, 'g'), '').trim();
+  const clean = String(description || '')
+    .replace(new RegExp(`${start}[\\s\\S]*?${end}`, 'g'), '')
+    .replace(/(?:\s*---\s*Metadados usados automaticamente pelos aplicativos\.(?: Edite com cuidado\.)?\s*)+$/i, '')
+    .trim();
   return `${clean}\n\n---\nMetadados usados automaticamente pelos aplicativos. Edite com cuidado.\n${start}\n${JSON.stringify(metadata, null, 2)}\n${end}`;
 }
 

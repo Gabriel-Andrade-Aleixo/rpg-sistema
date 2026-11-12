@@ -40,6 +40,7 @@ import { changeHitPoints, recordDeathSave, resetDeathSaves } from '../lib/deathS
 import { advanceSpectralTurn, infusionDamage, infusionManaCost, religionGrade, religionValue, spectralInfusions, spectralSpellPresets, useInfusion, useMagicArrow, useSpell } from '../lib/classActions';
 import { advanceDemonicTurn, changeCorruption, corruptionStatus, corruptionValue, demonicDamageBonus, demonicIncomingDamageBonus, demonicSpellCost, isDemonicSpell, toggleDemonicZone } from '../lib/corruption';
 import { advanceTechniqueTurn, canLearnCombatTechniques, recordTechniqueTraining, saveCombatTechnique, setTechniqueCombatState, techniqueCostOptions, useCombatTechnique } from '../lib/combatTechniques';
+import { markSwordsmanAction, setSwordsmanThreats, startSwordsmanTurn, swordsmanState } from '../lib/swordsman';
 
 export default function CharacterSheet({ character, catalog, onEdit, onUpdate, requestRoll, activeTab = 'summary', onTabChange }) {
   const [xpDialog, setXpDialog] = useState('');
@@ -70,13 +71,16 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
     requestRoll({ characterId: character.id, type, name, sides, modifiers: [], penalties: 0, origin: 'character_sheet' }, recordRoll);
   }
 
-  function recordRoll(record) {
+  function recordRolls(records, swordsmanAction = '') {
     const luckBonus = Number(character.resources?.pendingLuckBonus || 0);
-    const adjusted = luckBonus > 0
+    const adjusted = records.map((record, index) => luckBonus > 0 && index === 0
       ? { ...record, finalResult: Number(record.finalResult || 0) + luckBonus, modifiers: [...(record.modifiers || []), { id: 'luck_bonus', sourceId: character.id, sourceName: 'Sorte', sourceType: 'luck', targetType: 'roll', targetId: record.type, value: luckBonus }] }
-      : record;
-    persist({ rollHistory: [adjusted, ...(character.rollHistory || [])].slice(0, 30), resources: luckBonus > 0 ? { ...character.resources, pendingLuckBonus: 0 } : character.resources });
+      : record);
+    const next = swordsmanAction ? markSwordsmanAction(character, swordsmanAction) : character;
+    persistCharacter({ ...next, rollHistory: [...adjusted.reverse(), ...(character.rollHistory || [])].slice(0, 30), resources: luckBonus > 0 ? { ...next.resources, pendingLuckBonus: 0 } : next.resources });
   }
+
+  function recordRoll(record, swordsmanAction = '') { recordRolls([record], swordsmanAction); }
 
   function moveItem(item, target) {
     const source = target === 'equipment' ? 'inventory' : 'equipment';
@@ -180,6 +184,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
       </Panel>}
 
       {normalize(classEntry?.name || '') === 'arqueiro espectral' && <ClassActionsPanel character={character} classEntry={classEntry} onChange={persistCharacter} />}
+      {parsedClass?.metadata?.id === 'swordsman' && <SwordsmanPanel character={character} catalog={catalog} onChange={persistCharacter} requestRoll={requestRoll} recordRoll={recordRoll} recordRolls={recordRolls} />}
 
       <CombatTechniquesPanel character={character} parsedClass={parsedClass} onChange={persistCharacter} />
 
@@ -456,6 +461,60 @@ function ClassActionsPanel({ character, classEntry, onChange }) {
     {error && <p className="validationError">{error}</p>}
     <div className="quickActions"><button onClick={() => onChange(advanceSpectralTurn(character, { attacked: true }))}>Novo turno · atacou</button><button onClick={() => onChange(advanceSpectralTurn(character, { attacked: false }))}>Não atacou</button><button onClick={() => onChange(advanceSpectralTurn(character, { tookDamage: true }))}>Sofreu dano</button></div>
     <section className="classActionBlock"><h4>Flecha Mágica e infusões</h4><p className="muted">A Flecha Mágica causa 2d4 de dano. Informe o total obtido; a infusão escolhida aprimora o disparo e aplica Cadência, Mana e Foco.</p><div className="arrowInputs"><label>Resultado dos 2d4<input type="number" min="2" max="8" value={arrowDamage} onChange={(event) => setArrowDamage(event.target.value)} /></label><label>Ataques no turno<input type="number" min="1" value={attacksThisTurn} onChange={(event) => setAttacksThisTurn(event.target.value)} /></label></div><div className="infusionGrid">{spectralInfusions.map((infusion) => { const cadence = Number(character.resources?.cadenciaCurrent || 0); const mana = infusionManaCost(infusion, cadence, attacksThisTurn); const damage = infusionDamage(infusion, arrowDamage, cadence); return <article key={infusion.id}><div><strong>Infusão: {infusion.name}</strong><span>{mana} PM · {infusion.focusCost} Foco</span></div><p>{infusion.effect}</p><div className="arrowDamage"><span>Dano da Flecha Mágica</span><strong>{damage.hit}</strong>{damage.chainTargets > 0 && <><span>Alvos encadeados</span><strong>{damage.chainTargets}</strong></>}</div><button className="primaryButton compactButton" onClick={() => applyInfusion(infusion)}>Aplicar infusão</button></article>; })}</div></section>
+  </Panel>;
+}
+
+function SwordsmanPanel({ character, catalog, onChange, requestRoll, recordRoll, recordRolls }) {
+  const [areaAttack, setAreaAttack] = useState(false);
+  const [specializedSword, setSpecializedSword] = useState(false);
+  const [attackAttribute, setAttackAttribute] = useState('dexterity');
+  const state = swordsmanState(character);
+  const focused = state.threats > 0 && state.concentration === 0;
+  const concentrationName = state.threats === 0 ? 'Sem alvo focado' : ['Total', 'Dividida', 'Quebrada'][state.concentration];
+  const inCombat = Boolean(character.combatContext?.inCombat);
+
+  function rollAttack() {
+    const base = attributeBreakdown(character, attackAttribute).total;
+    requestRoll({ characterId: character.id, type: 'attack', name: 'Ataque de espada', sides: 20, modifiers: [
+      { id: 'swordsman_attribute', sourceId: character.id, sourceName: attributeLabel(attackAttribute), sourceType: 'attribute', targetType: 'roll', targetId: 'attack', value: base },
+      ...(specializedSword ? [{ id: 'swordsman_specialization', sourceId: character.id, sourceName: 'Especialização em Espada', sourceType: 'class', targetType: 'roll', targetId: 'attack', value: 1 }] : []),
+      ...(focused ? [{ id: 'swordsman_focus', sourceId: character.id, sourceName: 'Concentração Total', sourceType: 'class', targetType: 'roll', targetId: 'attack', value: 1 }] : []),
+    ], origin: 'character_sheet' }, recordRoll);
+  }
+
+  function rollDodge() {
+    const entry = catalogGroups(catalog).skills.find((item) => normalize(item.name) === 'acrobacia');
+    const value = entry ? skillValue(character, parseSkill(entry)) : 0;
+    const proficient = (character.proficiencies || []).some((item) => normalize(item).includes('acrobacia'));
+    const conditional = (character.modifiers || []).filter((item) => item.targetType === 'skillRoll' && normalize(item.targetId) === 'acrobacia');
+    requestRoll({ characterId: character.id, type: 'skill', name: 'Esquiva Instintiva', sides: 20, rollMode: areaAttack ? 'disadvantage' : 'normal', modifiers: [
+      { id: 'swordsman_acrobatics', sourceId: entry?.id || character.id, sourceName: 'Acrobacia', sourceType: 'skill', targetType: 'roll', targetId: 'acrobatics', value },
+      ...(proficient ? [{ id: 'swordsman_proficiency', sourceId: character.id, sourceName: 'Proficiência', sourceType: 'proficiency', targetType: 'roll', targetId: 'acrobatics', value }] : []),
+      ...conditional,
+      ...(state.concentration < 2 && state.threats > 0 ? [{ id: 'swordsman_dodge_focus', sourceId: character.id, sourceName: 'Concentração', sourceType: 'class', targetType: 'roll', targetId: 'acrobatics', value: 1 }] : []),
+    ], origin: 'character_sheet' }, (record) => recordRoll(record, 'dodge'));
+  }
+
+  function rollOpening() {
+    const base = attributeBreakdown(character, attackAttribute).total;
+    const request = { characterId: character.id, type: 'attack', name: character.level >= 5 ? 'Ataque de Abertura · golpe 1 de 2' : 'Ataque de Abertura', sides: 20, rollMode: state.concentration === 1 ? 'disadvantage' : 'normal', modifiers: [
+      { id: 'swordsman_opening_attribute', sourceId: character.id, sourceName: attributeLabel(attackAttribute), sourceType: 'attribute', targetType: 'roll', targetId: 'opening', value: base },
+      ...(specializedSword ? [{ id: 'swordsman_opening_specialization', sourceId: character.id, sourceName: 'Especialização em Espada', sourceType: 'class', targetType: 'roll', targetId: 'opening', value: 1 }] : []),
+      ...(focused ? [{ id: 'swordsman_opening_focus', sourceId: character.id, sourceName: 'Concentração Total', sourceType: 'class', targetType: 'roll', targetId: 'opening', value: 1 }] : []),
+    ], origin: 'character_sheet' };
+    requestRoll(request, (first) => {
+      if (character.level < 5) { recordRoll(first, 'opening'); return; }
+      requestRoll({ ...request, name: 'Ataque de Abertura · golpe 2 de 2' }, (second) => recordRolls([first, second], 'opening'));
+    });
+  }
+
+  return <Panel title="Concentração do Espadachim" subtitle="Foco, esquiva e aberturas" wide>
+    <div className="swordsmanStatus"><div><span>Estado</span><strong>{concentrationName}</strong></div><div><span>Ameaças</span><strong>{state.threats}</strong></div><div><span>Esquiva</span><strong>{state.dodgeUsed ? 'Usada' : 'Disponível'}</strong></div><div><span>Abertura</span><strong>{state.openingUsed ? 'Usada' : 'Disponível'}</strong></div></div>
+    <div className="swordsmanControls"><label>Ameaças que exigem atenção<select aria-label="Ameaças que exigem atenção" value={state.threats} onChange={(event) => onChange(setSwordsmanThreats(character, Number(event.target.value)))}>{Array.from({ length: 21 }, (_, count) => <option key={count} value={count}>{count}</option>)}</select></label><label>Atributo do ataque<select aria-label="Atributo do ataque" value={attackAttribute} onChange={(event) => setAttackAttribute(event.target.value)}><option value="dexterity">Destreza</option><option value="strength">Força</option></select></label><label className="swordsmanCheck"><input type="checkbox" checked={specializedSword} onChange={(event) => setSpecializedSword(event.target.checked)} />Usando espada especializada (+1)</label><label className="swordsmanCheck"><input type="checkbox" checked={areaAttack} onChange={(event) => setAreaAttack(event.target.checked)} />Ataque em área contra Esquiva</label></div>
+    {!inCombat && <button className="primaryButton compactButton swordsmanStart" onClick={() => onChange(setTechniqueCombatState(character, true))}>Iniciar combate</button>}
+    <div className="quickActions"><button onClick={() => onChange(startSwordsmanTurn(character))} disabled={!inCombat}>Início do turno</button><button onClick={rollAttack} disabled={!inCombat}>Ataque de espada</button>{character.level >= 2 && <button onClick={rollDodge} disabled={!inCombat || state.dodgeUsed}>Esquiva Instintiva</button>}{character.level >= 3 && <button onClick={rollOpening} disabled={!inCombat || !state.threats || state.openingUsed || state.concentration === 2}>Ataque de Abertura</button>}</div>
+    {character.level >= 5 && <p className="muted">Contra-Ataque Duplo: dois testes de ataque consecutivos, cada um com dano próprio se acertar.</p>}
+    <p className="muted">Bônus de Concentração Total: +1 no acerto e na Esquiva contra o alvo focado. Em Concentração Dividida, a Abertura é feita com desvantagem. A Especialização só se aplica ao tipo de espada escolhido.</p>
   </Panel>;
 }
 

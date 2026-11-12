@@ -270,6 +270,12 @@ function normalizeResources(raw, classRules, attributes, bonuses, errors) {
   result.pendingLuckBonus = boundedInteger(result.pendingLuckBonus ?? 0, 0, 1, 'Bônus pendente de Sorte', errors);
   result.infusionsThisTurn = boundedInteger(result.infusionsThisTurn ?? 0, 0, 4, 'Infusões no turno', errors);
   result.spectralInfusionUsedThisTurn = result.spectralInfusionUsedThisTurn === true || result.spectralInfusionUsedThisTurn === 1 ? 1 : 0;
+  if (classRules.id === 'swordsman') {
+    result.swordsmanThreats = boundedInteger(result.swordsmanThreats ?? 0, 0, 20, 'Ameaças do Espadachim', errors);
+    result.swordsmanConcentration = boundedInteger(result.swordsmanConcentration ?? Math.min(2, Math.max(0, result.swordsmanThreats - 1)), 0, 2, 'Concentração do Espadachim', errors);
+    result.swordsmanDodgeUsed = boundedInteger(result.swordsmanDodgeUsed ?? 0, 0, 1, 'Esquiva no turno', errors);
+    result.swordsmanOpeningUsed = boundedInteger(result.swordsmanOpeningUsed ?? 0, 0, 1, 'Ataque de Abertura no turno', errors);
+  }
   for (const resource of classRules.resources || []) {
     if (!resource.id || !resource.maximum) continue;
     const maximum = evaluateFormula(resource.maximum, attributes, bonuses);

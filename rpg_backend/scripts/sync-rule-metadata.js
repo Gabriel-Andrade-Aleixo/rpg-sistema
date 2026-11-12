@@ -96,6 +96,13 @@ const classes = {
     attributeProgression: [progression(1, 3, { strength: 1 }), progression(4, 10, { strength: 1, dexterity: 1 })],
     allowedCombatXpAttributes: ['strength', 'dexterity', 'constitution'],
   },
+  Espadachim: {
+    id: 'swordsman', defense: f(0, { dexterity: .4, constitution: .4, intelligence: .2 }),
+    usesWeapons: true,
+    hp: hp(f(12, { constitution: 3, dexterity: .5 }), f(5, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 4, ...f(4, { constitution: 1 }) }),
+    attributeProgression: [progression(1, 3, { dexterity: 1 }), progression(4, 10, { dexterity: 1, constitution: 1 })],
+    combatRules: { concentration: ['total', 'divided', 'broken'], maximumOpeningAttacksPerTurn: 1, instinctiveDodgeFromLevel: 2, openingAttackFromLevel: 3, doubleOpeningAttackFromLevel: 5, doubleSlashFromLevel: 8, guardStanceFromLevel: 9 },
+  },
 };
 
 const races = {

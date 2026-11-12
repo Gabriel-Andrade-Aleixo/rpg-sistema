@@ -219,6 +219,16 @@ class CombatTechniqueService {
   Character setCombatState(Character character, bool active) =>
       character.copyWith(
         combatContext: {...character.combatContext, 'inCombat': active},
+        resources: active ||
+                !character.resources.keys.any((key) => key.startsWith('swordsman'))
+            ? character.resources
+            : {
+                ...character.resources,
+                'swordsmanThreats': 0,
+                'swordsmanConcentration': 0,
+                'swordsmanDodgeUsed': 0,
+                'swordsmanOpeningUsed': 0,
+              },
         techniques: character.techniques
             .map(
               (item) => item.copyWith(

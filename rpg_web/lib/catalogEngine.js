@@ -6,7 +6,7 @@ const legacyNames = {
   bugbear: 'bugbear', firbolg: 'firbolg', barbarian: 'barbaro', mage: 'mago',
   spectral_archer: 'arqueiro espectral', tactical_maestro: 'maestro tatico', cleric: 'clerigo',
   paladin: 'paladino', rogue: 'ladino', ranger: 'ranger', bard: 'bardo',
-  fighter: 'lutador',
+  fighter: 'lutador', swordsman: 'espadachim',
   '6a3de251945d24a05e0664a7': 'thri-kreen',
   '6a3de252b4339be40afe3fd4': 'vedalken',
   '6a3de25d749c699cb406f356': 'arqueiro espectral',
@@ -587,15 +587,24 @@ export function validateCharacter(character, catalog) {
   return { errors, warnings, suggestions, isValid: errors.length === 0 };
 }
 
-export function createRoll({ characterId = '', type, name, sides, modifiers = [], penalties = 0, origin = 'character_sheet' }) {
-  const rawResult = Math.floor(Math.random() * sides) + 1;
+export function selectRollResult(first, second, mode = 'normal') {
+  if (mode === 'disadvantage') return Math.min(first, second);
+  if (mode === 'advantage') return Math.max(first, second);
+  return first;
+}
+
+export function createRoll({ characterId = '', type, name, sides, modifiers = [], penalties = 0, origin = 'character_sheet', rollMode = 'normal' }) {
+  const firstResult = Math.floor(Math.random() * sides) + 1;
+  const secondaryResult = rollMode === 'normal' ? null : Math.floor(Math.random() * sides) + 1;
+  const rawResult = selectRollResult(firstResult, secondaryResult, rollMode);
   const bonus = modifiers.reduce((sum, item) => sum + Number(item.value || 0), 0);
-  return { id: `roll_${Date.now()}_${Math.random().toString(16).slice(2)}`, characterId, type, name, die: `d${sides}`, rawResult, finalResult: rawResult + bonus - penalties, modifiers, penalties, origin, createdAt: new Date().toISOString() };
+  return { id: `roll_${Date.now()}_${Math.random().toString(16).slice(2)}`, characterId, type, name, die: `d${sides}`, rawResult, firstResult, secondaryResult, rollMode, finalResult: rawResult + bonus - penalties, modifiers, penalties, origin, createdAt: new Date().toISOString() };
 }
 
 export function rollFormula(roll) {
   const bonus = (roll.modifiers || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  return `${roll.die} ${bonus >= 0 ? '+' : '-'} ${Math.abs(bonus)}${roll.penalties ? ` - ${roll.penalties}` : ''}`;
+  const pair = roll.secondaryResult == null ? '' : ` (${roll.rollMode === 'disadvantage' ? 'desvantagem' : 'vantagem'}: ${roll.firstResult ?? roll.rawResult}, ${roll.secondaryResult})`;
+  return `${roll.die}${pair} ${bonus >= 0 ? '+' : '-'} ${Math.abs(bonus)}${roll.penalties ? ` - ${roll.penalties}` : ''}`;
 }
 
 function parseUnlocks(lines) {

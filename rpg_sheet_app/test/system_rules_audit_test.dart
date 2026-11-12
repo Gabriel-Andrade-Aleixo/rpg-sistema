@@ -66,7 +66,11 @@ void main() {
     {
       'name': 'Mago',
       'id': 'mage',
-      'defense': formula(0, {'dexterity': .7, 'constitution': .3}),
+      'defense': formula(0, {
+        'dexterity': .4,
+        'constitution': .4,
+        'intelligence': .2,
+      }),
       'hp': hp(
         formula(10, {'constitution': 3}),
         formula(7, {'constitution': 1}),
@@ -353,6 +357,39 @@ void main() {
         'level10': {'strength': 10, 'dexterity': 7},
       },
     },
+    {
+      'name': 'Espadachim',
+      'id': 'swordsman',
+      'defense': formula(0, {
+        'dexterity': .4,
+        'constitution': .4,
+        'intelligence': .2,
+      }),
+      'hp': hp(
+        formula(12, {'constitution': 3, 'dexterity': .5}),
+        formula(5, {'constitution': 1}),
+        {
+          'die': 8,
+          ...formula(0, {'constitution': 1}),
+        },
+        {
+          'die': 4,
+          ...formula(4, {'constitution': 1}),
+        },
+      ),
+      'progression': [
+        progression(1, 3, {'dexterity': 1}),
+        progression(4, 10, {'dexterity': 1, 'constitution': 1}),
+      ],
+      'expected': {
+        'defense': 3,
+        'initialHp': 25,
+        'fixedHp': 9,
+        'rollBonus': 4,
+        'hybridBonus': 8,
+        'level10': {'dexterity': 10, 'constitution': 7},
+      },
+    },
   ];
 
   CatalogEntry entryFor(Map<String, dynamic> rule) => CatalogEntry(
@@ -379,7 +416,7 @@ void main() {
     },
   );
 
-  test('as dez classes seguem as fórmulas oficiais do documento', () {
+  test('as onze classes seguem as fórmulas oficiais do documento', () {
     for (final rule in rules) {
       final parsed = parser.parseClass(entryFor(rule));
       final expected = rule['expected'] as Map<String, dynamic>;

@@ -11,6 +11,7 @@ import '../domain/services/character_recalculation_service.dart';
 import '../domain/services/combat_technique_service.dart';
 import '../domain/services/death_save_service.dart';
 import '../domain/services/experience_service.dart';
+import '../domain/services/swordsman_combat_service.dart';
 import '../domain/services/humanity_service.dart';
 import '../domain/services/corruption_service.dart';
 import '../models/catalog_models.dart';
@@ -56,11 +57,15 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
   static const _deathSaves = DeathSaveService();
   static const _classActions = ClassActionService();
   static const _techniques = CombatTechniqueService();
+  static const _swordsman = SwordsmanCombatService();
   static const _parser = TrelloParserService();
   static const _export = CharacterExportService();
   final _recalculation = CharacterRecalculationService();
   late Character _character;
   int _tabIndex = 0;
+  AttributeId _swordsmanAttackAttribute = AttributeId.dexterity;
+  bool _swordsmanSpecializedSword = false;
+  bool _swordsmanAreaAttack = false;
 
   CatalogEntry? get _race => widget.catalog.findById(_character.raceId);
   CatalogEntry? get _class => widget.catalog.findById(_character.classId);
@@ -156,6 +161,11 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       1 => <Widget>[
         if (normalizeCatalogText(_class?.name ?? '') == 'arqueiro espectral')
           SectionCard(title: 'Flecha Mágica', child: _infusionSection()),
+        if (normalizeCatalogText(_class?.name ?? '') == 'espadachim')
+          SectionCard(
+            title: 'Concentração do Espadachim',
+            child: _swordsmanSection(),
+          ),
         SectionCard(title: 'Técnicas de combate', child: _techniqueSection()),
         if (_hasRuleContext)
           SectionCard(
@@ -2356,7 +2366,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       name: record.name,
       die: record.die,
       rawResult: record.rawResult,
+      firstResult: record.firstResult,
       finalResult: record.finalResult + bonus,
+      secondaryResult: record.secondaryResult,
+      rollMode: record.rollMode,
       createdAt: record.createdAt,
       modifiers: [
         ...record.modifiers,
@@ -2375,14 +2388,276 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  Future<void> _persistRoll(DiceRollRecord record) async {
-    final adjusted = _applyPendingLuck(record);
+  Future<void> _persistRoll(DiceRollRecord record, {String? swordsmanAction}) =>
+      _persistRolls([record], swordsmanAction: swordsmanAction);
+
+  Future<void> _persistRolls(
+    List<DiceRollRecord> records, {
+    String? swordsmanAction,
+  }) async {
+    final adjusted = [
+      for (var index = 0; index < records.length; index++)
+        index == 0 ? _applyPendingLuck(records[index]) : records[index],
+    ];
+    final next = swordsmanAction == null
+        ? _character
+        : _swordsman.markAction(_character, swordsmanAction);
     await _persist(
-      _character.copyWith(
-        resources: {..._character.resources, 'pendingLuckBonus': 0},
-        rollHistory: [adjusted, ..._character.rollHistory].take(30).toList(),
+      next.copyWith(
+        resources: {...next.resources, 'pendingLuckBonus': 0},
+        rollHistory: [
+          ...adjusted.reversed,
+          ...next.rollHistory,
+        ].take(30).toList(),
       ),
     );
+  }
+
+  Widget _swordsmanSection() {
+    final state = _swordsman.state(_character);
+    final inCombat = _character.combatContext['inCombat'] == true;
+    final concentration = state.threats == 0
+        ? 'Sem alvo focado'
+        : switch (state.concentration) {
+            0 => 'Total',
+            1 => 'Dividida',
+            _ => 'Quebrada',
+          };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Concentração: $concentration · ${state.threats} ameaça(s)'),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          key: ValueKey('swordsman_threats_${state.threats}'),
+          initialValue: state.threats,
+          decoration: const InputDecoration(
+            labelText: 'Ameaças que exigem atenção',
+          ),
+          items: [
+            for (var count = 0; count <= 20; count++)
+              DropdownMenuItem(value: count, child: Text('$count')),
+          ],
+          onChanged: (count) {
+            if (count != null) {
+              _persist(_swordsman.setThreats(_character, count));
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<AttributeId>(
+          key: ValueKey(
+            'swordsman_attribute_${_swordsmanAttackAttribute.name}',
+          ),
+          initialValue: _swordsmanAttackAttribute,
+          decoration: const InputDecoration(labelText: 'Atributo do ataque'),
+          items: const [
+            DropdownMenuItem(
+              value: AttributeId.dexterity,
+              child: Text('Destreza'),
+            ),
+            DropdownMenuItem(value: AttributeId.strength, child: Text('Força')),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              setState(() => _swordsmanAttackAttribute = value);
+            }
+          },
+        ),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Usando espada especializada (+1)'),
+          value: _swordsmanSpecializedSword,
+          onChanged: (value) => setState(() => _swordsmanSpecializedSword = value),
+        ),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Ataque em área contra Esquiva'),
+          value: _swordsmanAreaAttack,
+          onChanged: (value) => setState(() => _swordsmanAreaAttack = value),
+        ),
+        if (!inCombat)
+          FilledButton.icon(
+            onPressed: () => _persist(_techniques.setCombatState(_character, true)),
+            icon: const Icon(Icons.sports_martial_arts),
+            label: const Text('Iniciar combate'),
+          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton(
+              onPressed: inCombat
+                  ? () => _persist(_swordsman.startTurn(_character))
+                  : null,
+              child: const Text('Início do turno'),
+            ),
+            FilledButton(
+              onPressed: inCombat
+                  ? () => _rollSwordsmanAttack()
+                  : null,
+              child: const Text('Ataque de espada'),
+            ),
+            if (_character.level >= 2)
+              OutlinedButton(
+                onPressed: inCombat && !state.dodgeUsed
+                    ? _rollSwordsmanDodge
+                    : null,
+                child: const Text('Esquiva Instintiva'),
+              ),
+            if (_character.level >= 3)
+              OutlinedButton(
+                onPressed:
+                    inCombat &&
+                        state.threats > 0 &&
+                        !state.openingUsed &&
+                        state.concentration < 2
+                    ? () => _rollSwordsmanAttack(opening: true)
+                    : null,
+                child: const Text('Ataque de Abertura'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_character.level >= 5)
+          const Text(
+            'Contra-Ataque Duplo: dois testes de ataque consecutivos, cada um com dano próprio se acertar.',
+          ),
+        const Text(
+          'Concentração Total: +1 no acerto e na Esquiva contra o alvo focado. Em Concentração Dividida, a Abertura tem desvantagem. A Especialização só vale com o tipo de espada escolhido.',
+        ),
+      ],
+    );
+  }
+
+  Future<void> _rollSwordsmanAttack({bool opening = false}) async {
+    final state = _swordsman.state(_character);
+    final base = _attributes
+        .calculate(_character, _swordsmanAttackAttribute, _character.modifiers)
+        .total;
+    final modifiers = <Modifier>[
+      Modifier(
+        id: 'swordsman_attribute',
+        sourceId: _character.id,
+        sourceName: _swordsmanAttackAttribute.label,
+        sourceType: 'attribute',
+        targetType: 'roll',
+        targetId: 'attack',
+        value: base,
+      ),
+      if (_swordsmanSpecializedSword)
+        Modifier(
+          id: 'swordsman_specialization',
+          sourceId: _character.id,
+          sourceName: 'Especialização em Espada',
+          sourceType: 'class',
+          targetType: 'roll',
+          targetId: 'attack',
+          value: 1,
+        ),
+      if (state.threats > 0 && state.concentration == 0)
+        Modifier(
+          id: 'swordsman_focus',
+          sourceId: _character.id,
+          sourceName: 'Concentração Total',
+          sourceType: 'class',
+          targetType: 'roll',
+          targetId: 'attack',
+          value: 1,
+        ),
+    ];
+    final result = await DiceResultModal.show(
+      context,
+      characterId: _character.id,
+      type: 'attack',
+      name: opening
+          ? (_character.level >= 5
+                ? 'Ataque de Abertura · golpe 1 de 2'
+                : 'Ataque de Abertura')
+          : 'Ataque de espada',
+      sides: 20,
+      modifiers: modifiers,
+      rollMode: opening && state.concentration == 1 ? 'disadvantage' : 'normal',
+    );
+    if (result == null) return;
+    if (opening && _character.level >= 5 && mounted) {
+      final second = await DiceResultModal.show(
+        context,
+        characterId: _character.id,
+        type: 'attack',
+        name: 'Ataque de Abertura · golpe 2 de 2',
+        sides: 20,
+        modifiers: modifiers,
+        rollMode: state.concentration == 1 ? 'disadvantage' : 'normal',
+      );
+      if (second != null) {
+        await _persistRolls([result, second], swordsmanAction: 'opening');
+      } else {
+        await _persistRoll(result, swordsmanAction: 'opening');
+      }
+    } else {
+      await _persistRoll(result, swordsmanAction: opening ? 'opening' : null);
+    }
+  }
+
+  Future<void> _rollSwordsmanDodge() async {
+    final state = _swordsman.state(_character);
+    final entries = widget.catalog.skills
+        .where((item) => normalizeCatalogText(item.name) == 'acrobacia')
+        .toList();
+    final entry = entries.isEmpty ? null : entries.first;
+    final value = entry == null
+        ? 0
+        : _skills.officialValue(_character, _parser.parseSkill(entry));
+    final proficient = _character.proficiencies.any(
+      (item) => normalizeCatalogText(item).contains('acrobacia'),
+    );
+    final modifiers = <Modifier>[
+      Modifier(
+        id: 'swordsman_acrobatics',
+        sourceId: entry?.id ?? _character.id,
+        sourceName: 'Acrobacia',
+        sourceType: 'skill',
+        targetType: 'roll',
+        targetId: 'acrobatics',
+        value: value,
+      ),
+      if (proficient)
+        Modifier(
+          id: 'swordsman_proficiency',
+          sourceId: _character.id,
+          sourceName: 'Proficiência',
+          sourceType: 'proficiency',
+          targetType: 'roll',
+          targetId: 'acrobatics',
+          value: value,
+        ),
+      ..._character.modifiers.where(
+        (item) =>
+            item.targetType == 'skillRoll' &&
+            normalizeCatalogText(item.targetId) == 'acrobacia',
+      ),
+      if (state.threats > 0 && state.concentration < 2)
+        Modifier(
+          id: 'swordsman_dodge_focus',
+          sourceId: _character.id,
+          sourceName: 'Concentração',
+          sourceType: 'class',
+          targetType: 'roll',
+          targetId: 'acrobatics',
+          value: 1,
+        ),
+    ];
+    final result = await DiceResultModal.show(
+      context,
+      characterId: _character.id,
+      type: 'skill',
+      name: 'Esquiva Instintiva',
+      sides: 20,
+      modifiers: modifiers,
+      rollMode: _swordsmanAreaAttack ? 'disadvantage' : 'normal',
+    );
+    if (result != null) await _persistRoll(result, swordsmanAction: 'dodge');
   }
 
   Widget _humanityBar(String label, int value, int maximum) => Column(

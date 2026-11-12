@@ -47,6 +47,30 @@ test('backend recalcula a ficha Zenitti com CA 14 e recursos oficiais', () => {
   assert.equal(result.resources.focoMax, 6);
 });
 
+test('Espadachim recebe HP, CA, Mana geral e Destreza da V0.4 no nível 1', () => {
+  const swordsman = {
+    id: 'class-swordsman', name: 'Espadachim', category: 'Classes',
+    ...metadata({
+      type: 'class', usesWeapons: true,
+      defense: { base: 0, terms: { dexterity: .4, constitution: .4, intelligence: .2 } },
+      hp: { initial: { base: 12, terms: { constitution: 3, dexterity: .5 } }, perLevel: { fixed: { base: 5, terms: { constitution: 1 } }, roll: { die: 8, base: 0, terms: { constitution: 1 } }, hybrid: { die: 4, base: 4, terms: { constitution: 1 } } } },
+      attributeProgression: [{ from: 1, to: 3, perLevel: { dexterity: 1 } }, { from: 4, to: 10, perLevel: { dexterity: 1, constitution: 1 } }],
+    }),
+  };
+  const value = zenitti();
+  value.classId = swordsman.id;
+  value.levelHistory = [{ level: 1, hpMethod: 'fixed', hpAdded: 26 }];
+  value.maxHp = 26;
+  value.currentHp = 26;
+  value.currentMana = 11;
+  const result = validateAndNormalizeCharacter(value, { entries: [race, swordsman] });
+  assert.equal(result.derivedStats.effectiveAttributes.dexterity, 4);
+  assert.equal(result.derivedStats.armorClass, 14);
+  assert.equal(result.maxHp, 26);
+  assert.equal(result.maxMana, 11);
+  assert.equal(result.derivedStats.canLearnCombatTechniques, true);
+});
+
 test('backend migra referência antiga e aceita item personalizado seguro', () => {
   const legacy = zenitti();
   legacy.inventory = [{ id: 'owned', catalogId: 'trello-old', name: 'Espada curta', quantity: 1 }];

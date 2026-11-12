@@ -98,4 +98,31 @@ void main() {
     expect(character.techniques.single.cooldownRemaining, 0);
     expect(character.techniques.single.usedThisCombat, isFalse);
   });
+
+  test('encerrar combate limpa o estado do Espadachim', () {
+    final character = Character(
+      id: 'swordsman-1',
+      name: 'Teste',
+      playerName: 'Jogador',
+      raceId: 'human',
+      classId: 'swordsman',
+      resources: {
+        'hp': 12,
+        'swordsmanThreats': 3,
+        'swordsmanConcentration': 2,
+        'swordsmanDodgeUsed': 1,
+        'swordsmanOpeningUsed': 1,
+      },
+    );
+    final ended = service.setCombatState(character, false);
+    expect(ended.resources['hp'], 12);
+    for (final key in [
+      'swordsmanThreats',
+      'swordsmanConcentration',
+      'swordsmanDodgeUsed',
+      'swordsmanOpeningUsed',
+    ]) {
+      expect(ended.resources[key], 0);
+    }
+  });
 }

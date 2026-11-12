@@ -1,5 +1,5 @@
 param(
-  [string]$DocumentPath = (Join-Path $PSScriptRoot '..\..\RPG SISTEMA V0.3.docx')
+  [string]$DocumentPath = (Join-Path $PSScriptRoot '..\..\RPG SISTEMA V0.4.docx')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -93,7 +93,8 @@ $sections = @(
   @{ Source = 'LADINO'; Card = 'Ladino' },
   @{ Source = 'RANGER'; Card = 'Ranger' },
   @{ Source = 'BARDO'; Card = 'Bardo' },
-  @{ Source = 'LUTADOR'; Card = 'Lutador' }
+  @{ Source = 'LUTADOR'; Card = 'Lutador' },
+  @{ Source = 'Espadachim'; Card = 'Espadachim' }
 )
 
 for ($index = 0; $index -lt $sections.Count; $index++) {

@@ -102,6 +102,15 @@ export function setTechniqueCombatState(character, active) {
   return {
     ...character,
     combatContext: { ...(character.combatContext || {}), inCombat: active },
+    resources: active || !Object.keys(character.resources || {}).some((key) => key.startsWith('swordsman'))
+      ? character.resources
+      : {
+          ...character.resources,
+          swordsmanThreats: 0,
+          swordsmanConcentration: 0,
+          swordsmanDodgeUsed: 0,
+          swordsmanOpeningUsed: 0,
+        },
     techniques: (character.techniques || []).map((item) => ({
       ...item,
       cooldownRemaining: active ? Number(item.cooldownRemaining || 0) : 0,

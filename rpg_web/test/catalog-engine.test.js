@@ -13,6 +13,7 @@ import {
   parseRace,
   parseSkill,
   recalculateCharacter,
+  selectRollResult,
   skillValue,
   spentInitialAttributePoints,
   validateCharacter,
@@ -98,6 +99,12 @@ const classRules = [
     progression: [progression(1, 3, { strength: 1 }), progression(4, 10, { strength: 1, dexterity: 1 })],
     expected: { defense: 3, initialHp: 30, fixedHp: 11, rollBonus: 4, hybridBonus: 9, level10: { strength: 10, dexterity: 7 } },
   },
+  {
+    name: 'Espadachim', id: 'swordsman', defense: formula(0, { dexterity: .4, constitution: .4, intelligence: .2 }),
+    hp: hp(formula(12, { constitution: 3, dexterity: .5 }), formula(5, { constitution: 1 }), { die: 8, ...formula(0, { constitution: 1 }) }, { die: 4, ...formula(4, { constitution: 1 }) }),
+    progression: [progression(1, 3, { dexterity: 1 }), progression(4, 10, { dexterity: 1, constitution: 1 })],
+    expected: { defense: 3, initialHp: 25, fixedHp: 9, rollBonus: 4, hybridBonus: 8, level10: { dexterity: 10, constitution: 7 } },
+  },
 ];
 
 function entryFor(rule) {
@@ -117,7 +124,7 @@ function entryFor(rule) {
   };
 }
 
-test('as dez classes seguem as fórmulas oficiais do documento', () => {
+test('as onze classes seguem as fórmulas oficiais do documento', () => {
   const character = { ...emptyCharacter(), attributes, modifiers: [] };
   for (const rule of classRules) {
     const parsed = parseClass(entryFor(rule));
@@ -129,6 +136,11 @@ test('as dez classes seguem as fórmulas oficiais do documento', () => {
     assert.equal(evaluateRuleFormula(parsed.hpPerLevelHybridFormula, character), rule.expected.hybridBonus ?? null, `${rule.name}: bônus híbrido`);
     assert.equal(evaluateRuleFormula(parsed.manaFormula, character), rule.expected.mana ?? null, `${rule.name}: Mana`);
   }
+});
+
+test('desvantagem usa o menor dos dois d20', () => {
+  assert.equal(selectRollResult(17, 4, 'disadvantage'), 4);
+  assert.equal(selectRollResult(4, 17, 'advantage'), 17);
 });
 
 test('progressão de atributos acumula exatamente até o nível 10', () => {

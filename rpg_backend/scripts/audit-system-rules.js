@@ -106,6 +106,15 @@ const expectedClasses = {
     allowedCombatXpAttributes: ['strength', 'dexterity', 'constitution'],
     text: 'Nível 9 — Sequência Avançada',
   },
+  Espadachim: {
+    id: 'swordsman',
+    usesWeapons: true,
+    defense: f(0, { dexterity: .4, constitution: .4, intelligence: .2 }),
+    hp: hp(f(12, { constitution: 3, dexterity: .5 }), f(5, { constitution: 1 }), { die: 8, ...f(0, { constitution: 1 }) }, { die: 4, ...f(4, { constitution: 1 }) }),
+    attributeProgression: [p(1, 3, { dexterity: 1 }), p(4, 10, { dexterity: 1, constitution: 1 })],
+    combatRules: { concentration: ['total', 'divided', 'broken'], maximumOpeningAttacksPerTurn: 1, instinctiveDodgeFromLevel: 2, openingAttackFromLevel: 3, doubleOpeningAttackFromLevel: 5, doubleSlashFromLevel: 8, guardStanceFromLevel: 9 },
+    text: 'Nível 9 — Postura de Guarda',
+  },
 };
 
 const expectedRaces = {
@@ -143,7 +152,7 @@ try {
     assert.ok(entry, `Classe ausente: ${name}`);
     const metadata = metadataOf(entry);
     assert.equal(metadata?.type, 'class', `${name}: metadados de classe ausentes`);
-    for (const field of ['id', 'defense', 'hp', 'mana', 'resources', 'attributeProgression', 'allowedCombatXpAttributes']) {
+    for (const field of ['id', 'usesWeapons', 'defense', 'hp', 'mana', 'resources', 'attributeProgression', 'allowedCombatXpAttributes', 'combatRules']) {
       if (!(field in expected)) continue;
       assert.deepEqual(metadata[field], expected[field], `${name}: ${field} diverge do documento`);
     }
@@ -221,7 +230,7 @@ try {
 function loadSystemDocument() {
   const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
   const documentPath = process.env.RPG_SYSTEM_DOCUMENT
-    || path.resolve(scriptDirectory, '../../RPG SISTEMA V0.3.docx');
+    || path.resolve(scriptDirectory, '../../RPG SISTEMA V0.4.docx');
   if (!fs.existsSync(documentPath)) {
     throw new Error(`Documento oficial não encontrado: ${documentPath}`);
   }
@@ -244,7 +253,7 @@ function assertDocumentRules(text) {
   const normalized = normalize(text);
   const required = [
     'barbaro', 'mago', 'arqueiro espectral', 'maestro tatico', 'clerigo',
-    'paladino', 'ladino', 'ranger', 'bardo', 'lutador', 'thri-kreen',
+    'paladino', 'ladino', 'ranger', 'bardo', 'lutador', 'espadachim', 'thri-kreen',
     'vedalken', 'lizardfolk', 'genasi', 'bugbear', 'elfos',
     'tecnicas de combate geral', 'treina la fora de combate',
     '5 da divindade atual',
