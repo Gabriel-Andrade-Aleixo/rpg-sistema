@@ -116,6 +116,22 @@ test('Elfo aplica Constituição, escolha versátil e exige uma conexão', () =>
   assert.equal(result.derivedStats.effectiveAttributes.constitution, 5);
   assert.equal(result.derivedStats.effectiveAttributes.dexterity, 4);
 
+  const swordsman = {
+    id: 'class-swordsman', name: 'Espadachim', category: 'Classes',
+    ...metadata({
+      type: 'class',
+      defense: { base: 0, terms: { dexterity: .4, constitution: .4, intelligence: .2 } },
+      attributeProgression: [{ from: 1, to: 3, perLevel: { dexterity: 1 } }],
+    }),
+  };
+  const invested = validateAndNormalizeCharacter({
+    ...value, classId: swordsman.id,
+    attributes: { ...value.attributes, dexterity: 4, constitution: 2 },
+    currentMana: 10,
+  }, { entries: [elf, swordsman] });
+  assert.equal(invested.derivedStats.effectiveAttributes.dexterity, 5);
+  assert.equal(invested.maxMana, 10);
+
   assert.throws(
     () => validateAndNormalizeCharacter({ ...value, raceAttributeChoice: '', raceConnection: '' }, { entries: [elf, characterClass, sword] }),
     (error) => error.statusCode === 400

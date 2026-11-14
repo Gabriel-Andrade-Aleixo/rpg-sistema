@@ -364,6 +364,7 @@ export function recalculateCharacter(character, catalog) {
       description: 'Bônus racial ativo pelo contexto atual.',
     }));
   const racialChoice = race.metadata?.attributeChoice;
+  const startingClassModifiers = classProgressionModifiers(classEntry, characterClass, 1);
   const racialChoiceModifiers = racialChoice
     && (racialChoice.allowed || []).includes(character.raceAttributeChoice)
     ? [{
@@ -373,7 +374,13 @@ export function recalculateCharacter(character, catalog) {
       sourceType: 'race_choice',
       targetType: 'attribute',
       targetId: character.raceAttributeChoice,
-      value: Number(racialChoice.amount || 0),
+      value: attributePointBonus(
+        Number(character.attributes?.[character.raceAttributeChoice] || 0)
+          + [...race.modifiers, ...characterClass.modifiers, ...startingClassModifiers]
+            .filter((item) => item.targetType === 'attribute' && item.targetId === character.raceAttributeChoice)
+            .reduce((sum, item) => sum + Number(item.value || 0), 0),
+        Number(racialChoice.amount || 0),
+      ),
       operation: 'add',
       description: 'Atributo escolhido na criação pela versatilidade racial.',
     }]
@@ -421,6 +428,14 @@ function classProgressionModifiers(entry, characterClass, level) {
   return result;
 }
 
+function attributePointBonus(start, points) {
+  let value = start;
+  for (let index = 0; index < Math.max(0, Math.trunc(points)); index += 1) {
+    value += value < 5 ? 1 : value < 10 ? .5 : .2;
+  }
+  return value - start;
+}
+
 function nextResourceCurrent(current, oldMaximum, newMaximum) {
   const oldMax = Number(oldMaximum || 0), value = Number(current || 0);
   if (oldMax !== newMaximum && (oldMax === 0 || value === oldMax)) return newMaximum;
@@ -430,7 +445,7 @@ function nextResourceCurrent(current, oldMaximum, newMaximum) {
 function evaluateFormula(formula, baseAttributes, modifiers) {
   return Math.max(0, Math.floor(formula.base + formula.terms.reduce((sum, term) => {
     const breakdown = { base: Number(baseAttributes?.[term.attribute] || 0), bonus: modifiers.filter((item) => item.targetType === 'attribute' && item.targetId === term.attribute).reduce((value, item) => value + Number(item.value || 0), 0) };
-    return sum + (breakdown.base + breakdown.bonus) * term.weight;
+    return sum + Math.floor(breakdown.base + breakdown.bonus) * term.weight;
   }, 0)));
 }
 
@@ -501,7 +516,8 @@ function parseNamedFormula(lines, resourceName) {
 export function attributeBreakdown(character, attributeId) {
   const base = Number(character.attributes?.[attributeId]) || 0;
   const modifiers = (character.modifiers || []).filter((item) => item.targetType === 'attribute' && item.targetId === attributeId);
-  return { base, modifiers, total: Math.min(20, modifiers.reduce((sum, item) => sum + Number(item.value || 0), base)) };
+  const rawTotal = Math.min(20, modifiers.reduce((sum, item) => sum + Number(item.value || 0), base));
+  return { base, modifiers, rawTotal, total: Math.floor(rawTotal) };
 }
 
 export function skillValue(character, parsedSkill) {

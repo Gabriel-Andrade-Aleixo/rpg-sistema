@@ -1,6 +1,7 @@
 import { Dices } from 'lucide-react';
 
 export default function StatBreakdown({ label, breakdown, onRoll }) {
+  const format = (value) => Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   return (
     <details className="breakdown">
       <summary>
@@ -10,7 +11,8 @@ export default function StatBreakdown({ label, breakdown, onRoll }) {
       </summary>
       <div className="breakdownRows">
         <span>Pontos investidos <b>{breakdown.base}</b></span>
-        {breakdown.modifiers.map((item) => <span key={item.id}>{item.sourceName} <b>{Number(item.value) >= 0 ? '+' : ''}{item.value}</b></span>)}
+        {breakdown.modifiers.map((item) => <span key={item.id}>{item.sourceName} <b>{Number(item.value) >= 0 ? '+' : ''}{format(item.value)}</b></span>)}
+        {breakdown.rawTotal !== breakdown.total && <span>Antes de arredondar <b>{format(breakdown.rawTotal)}</b></span>}
         <span className="breakdownTotal">Valor atual <b>{breakdown.total}</b></span>
       </div>
     </details>

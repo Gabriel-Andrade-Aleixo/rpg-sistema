@@ -7,11 +7,13 @@ class StatBreakdown {
     required this.base,
     required this.modifiers,
     required this.total,
+    required this.rawTotal,
   });
 
   final int base;
   final List<Modifier> modifiers;
   final int total;
+  final double rawTotal;
 }
 
 class AttributeCalculator {
@@ -28,22 +30,31 @@ class AttributeCalculator {
               item.targetType == 'attribute' && item.targetId == attribute.name,
         )
         .toList();
-    var total = character.attributes[attribute] ?? 0;
+    var rawTotal = (character.attributes[attribute] ?? 0).toDouble();
     for (final modifier in relevant) {
-      total = _apply(total, modifier);
+      rawTotal = _apply(rawTotal, modifier);
     }
-    total = total.clamp(-999999, 20);
+    rawTotal = rawTotal.clamp(-999999, 20);
     return StatBreakdown(
       base: character.attributes[attribute] ?? 0,
       modifiers: relevant,
-      total: total,
+      rawTotal: rawTotal,
+      total: rawTotal.floor(),
     );
   }
 
-  int _apply(int current, Modifier modifier) => switch (modifier.operation) {
-    ModifierOperation.add => current + modifier.value.round(),
-    ModifierOperation.subtract => current - modifier.value.round(),
-    ModifierOperation.multiply => (current * modifier.value).round(),
-    ModifierOperation.overrideValue => modifier.value.round(),
+  static double pointBonus(num startingValue, num points) {
+    var value = startingValue.toDouble();
+    for (var index = 0; index < points.toInt(); index += 1) {
+      value += value < 5 ? 1 : value < 10 ? .5 : .2;
+    }
+    return value - startingValue;
+  }
+
+  double _apply(double current, Modifier modifier) => switch (modifier.operation) {
+    ModifierOperation.add => current + modifier.value,
+    ModifierOperation.subtract => current - modifier.value,
+    ModifierOperation.multiply => current * modifier.value,
+    ModifierOperation.overrideValue => modifier.value.toDouble(),
   };
 }

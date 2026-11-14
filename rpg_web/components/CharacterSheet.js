@@ -64,7 +64,7 @@ export default function CharacterSheet({ character, catalog, onEdit, onUpdate, r
   function rollAttribute(id, label) {
     const breakdown = attributeBreakdown(character, id);
     const rollBonuses = (character.modifiers || []).filter((item) => item.targetType === 'attributeRoll' && item.targetId === id);
-    requestRoll({ characterId: character.id, type: 'attribute', name: label, sides: 20, modifiers: [{ id: `base_${id}`, sourceId: character.id, sourceName: `${label} base`, sourceType: 'character', targetType: 'roll', targetId: id, value: breakdown.base }, ...breakdown.modifiers, ...rollBonuses], penalties: 0, origin: 'character_sheet' }, recordRoll);
+    requestRoll({ characterId: character.id, type: 'attribute', name: label, sides: 20, modifiers: [{ id: `attribute_${id}`, sourceId: character.id, sourceName: `${label} final`, sourceType: 'attribute', targetType: 'roll', targetId: id, value: breakdown.total }, ...rollBonuses], penalties: 0, origin: 'character_sheet' }, recordRoll);
   }
 
   function simpleRoll(type, name, sides = 20) {

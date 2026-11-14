@@ -2928,6 +2928,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
               label: attribute.label,
               base: breakdown.base,
               total: breakdown.total,
+              rawTotal: breakdown.rawTotal,
               modifiers: breakdown.modifiers,
               onRoll: () => _rollAttribute(attribute, breakdown),
             );
@@ -3834,15 +3835,14 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
   ) async {
     final modifiers = [
       Modifier(
-        id: 'base_${attribute.name}',
+        id: 'attribute_${attribute.name}',
         sourceId: _character.id,
-        sourceName: '${attribute.label} base',
-        sourceType: 'character',
+        sourceName: '${attribute.label} final',
+        sourceType: 'attribute',
         targetType: 'roll',
         targetId: attribute.name,
-        value: breakdown.base,
+        value: breakdown.total,
       ),
-      ...breakdown.modifiers,
       ..._character.modifiers.where(
         (item) =>
             item.targetType == 'attributeRoll' &&

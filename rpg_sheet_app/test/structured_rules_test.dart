@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rpg_sheet_app/domain/calculators/combat_calculator.dart';
+import 'package:rpg_sheet_app/domain/calculators/attribute_calculator.dart';
 import 'package:rpg_sheet_app/domain/calculators/official_formula_calculator.dart';
 import 'package:rpg_sheet_app/domain/services/character_recalculation_service.dart';
 import 'package:rpg_sheet_app/models/catalog_models.dart';
@@ -220,6 +221,31 @@ void main() {
     expect(bonusFor(AttributeId.constitution), 1);
     expect(bonusFor(AttributeId.dexterity), 2);
     expect(bonusFor(AttributeId.strength), 0);
+
+    final invested = CharacterRecalculationService().recalculate(
+      Character(
+        id: 'elf-swordsman-test',
+        name: 'Elfo Espadachim',
+        playerName: 'Jogador',
+        raceId: elf.id,
+        classId: characterClass.id,
+        raceAttributeChoice: AttributeId.dexterity.name,
+        raceConnection: 'Irmã de juramento',
+        attributes: const {AttributeId.dexterity: 4},
+      ),
+      OfficialCatalog(entries: [elf, characterClass]),
+    );
+    final dexterity = const AttributeCalculator().calculate(
+      invested,
+      AttributeId.dexterity,
+      invested.modifiers,
+    );
+    expect(dexterity.rawTotal, 5.5);
+    expect(dexterity.total, 5);
+    expect(
+      dexterity.modifiers.firstWhere((item) => item.sourceType == 'race_choice').value,
+      .5,
+    );
   });
 
   test('IDs antigos do Trello resolvem Zenitti e calculam CA oficial 14', () {

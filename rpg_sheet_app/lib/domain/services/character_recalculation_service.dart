@@ -2,8 +2,10 @@ import '../../models/catalog_models.dart';
 import '../../models/character.dart';
 import '../../models/character_records.dart';
 import '../../models/official_rule_models.dart';
+import '../../models/rpg_rule_models.dart';
 import '../../services/trello_parser_service.dart';
 import '../calculators/ability_calculator.dart';
+import '../calculators/attribute_calculator.dart';
 import '../calculators/equipment_calculator.dart';
 import '../calculators/proficiency_calculator.dart';
 import '../calculators/official_formula_calculator.dart';
@@ -32,7 +34,12 @@ class CharacterRecalculationService {
     final characterClass = _parser.parseClass(classEntry);
     final modifiers = [
       ...race.modifiers,
-      ..._raceChoiceModifiers(normalizedCharacter, race),
+      ..._raceChoiceModifiers(
+        normalizedCharacter,
+        race,
+        classEntry,
+        characterClass,
+      ),
       ..._conditionalRaceModifiers(normalizedCharacter, race),
       ...characterClass.modifiers,
       ..._classProgressionModifiers(
@@ -148,7 +155,12 @@ class CharacterRecalculationService {
     return result;
   }
 
-  List<Modifier> _raceChoiceModifiers(Character character, OfficialRace race) {
+  List<Modifier> _raceChoiceModifiers(
+    Character character,
+    OfficialRace race,
+    CatalogEntry classEntry,
+    OfficialCharacterClass characterClass,
+  ) {
     final raw = race.mechanics['attributeChoice'];
     if (raw is! Map) return const [];
     final rule = Map<String, dynamic>.from(raw);
@@ -156,6 +168,20 @@ class CharacterRecalculationService {
         .map((item) => item.toString())
         .toList();
     if (!allowed.contains(character.raceAttributeChoice)) return const [];
+    final selected = character.raceAttributeChoice;
+    final attribute = AttributeId.values
+        .where((item) => item.name == selected)
+        .firstOrNull;
+    if (attribute == null) return const [];
+    final startingClassModifiers = _classProgressionModifiers(
+      character.copyWith(level: 1),
+      classEntry,
+      characterClass,
+    );
+    final startingValue = (character.attributes[attribute] ?? 0) +
+        [...race.modifiers, ...characterClass.modifiers, ...startingClassModifiers]
+            .where((item) => item.targetType == 'attribute' && item.targetId == selected)
+            .fold<num>(0, (sum, item) => sum + item.value);
     return [
       Modifier(
         id: '${race.entry.id}_choice_${character.raceAttributeChoice}',
@@ -164,7 +190,10 @@ class CharacterRecalculationService {
         sourceType: 'race_choice',
         targetType: 'attribute',
         targetId: character.raceAttributeChoice,
-        value: (rule['amount'] as num?) ?? 0,
+        value: AttributeCalculator.pointBonus(
+          startingValue,
+          (rule['amount'] as num?) ?? 0,
+        ),
         description: 'Atributo escolhido na criação pela versatilidade racial.',
       ),
     ];

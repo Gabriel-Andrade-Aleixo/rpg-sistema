@@ -138,7 +138,15 @@ function collectAttributeBonuses(character, race, variant, characterClass, catal
   addAttributes(result, race.attributeBonuses);
   addAttributes(result, variant?.attributeBonuses);
   if (character.raceAttributeChoice && race.attributeChoice) {
-    result[character.raceAttributeChoice] += Number(race.attributeChoice.amount || 0);
+    const id = character.raceAttributeChoice;
+    const firstLevelClassBonus = (characterClass.attributeProgression || []).reduce(
+      (sum, range) => sum + (Number(range.from || 1) <= 1 && Number(range.to || 0) >= 1 ? Number(range.perLevel?.[id] || 0) : 0),
+      0,
+    );
+    result[id] += attributePointBonus(
+      Number(character.attributes?.[id] || 0) + result[id] + firstLevelClassBonus,
+      Number(race.attributeChoice.amount || 0),
+    );
   }
   addAttributes(result, character.permanentAttributeBonuses);
   for (const range of characterClass.attributeProgression || []) {
@@ -161,6 +169,14 @@ function addAttributes(target, values) {
   for (const [id, value] of Object.entries(values || {})) {
     if (attributeIds.includes(id)) target[id] += Number(value || 0);
   }
+}
+
+function attributePointBonus(start, points) {
+  let value = start;
+  for (let index = 0; index < Math.max(0, Math.trunc(points)); index += 1) {
+    value += value < 5 ? 1 : value < 10 ? .5 : .2;
+  }
+  return value - start;
 }
 
 function validateInventory(values, catalogById, label, errors) {
@@ -394,7 +410,7 @@ function normalizeExperienceMap(raw, errors) {
 }
 
 function calculateDerivedStats(character, race, variant, characterClass, catalogById, bonuses) {
-  const effectiveAttributes = Object.fromEntries(attributeIds.map((id) => [id, character.attributes[id] + bonuses[id]]));
+  const effectiveAttributes = Object.fromEntries(attributeIds.map((id) => [id, Math.floor(character.attributes[id] + bonuses[id])]));
   const nearby = Boolean(character.combatContext?.enemyWithinTwoMeters);
   const defenseFormula = nearby && characterClass.conditionalDefense?.enemyWithinTwoMeters
     ? characterClass.conditionalDefense.enemyWithinTwoMeters
@@ -445,7 +461,7 @@ function evaluateFormula(formula, attributes, bonuses) {
   if (!formula || typeof formula !== 'object') return 0;
   const terms = formula.terms || {};
   return Math.max(0, Math.floor(Number(formula.base || 0) + Object.entries(terms).reduce(
-    (sum, [id, weight]) => sum + (Number(attributes?.[id] || 0) + Number(bonuses?.[id] || 0)) * Number(weight || 0),
+    (sum, [id, weight]) => sum + Math.floor(Number(attributes?.[id] || 0) + Number(bonuses?.[id] || 0)) * Number(weight || 0),
     0,
   )));
 }

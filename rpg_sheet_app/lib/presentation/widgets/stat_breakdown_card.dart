@@ -8,6 +8,7 @@ class StatBreakdownCard extends StatelessWidget {
     required this.label,
     required this.base,
     required this.total,
+    this.rawTotal,
     this.modifiers = const [],
     this.onRoll,
   });
@@ -15,6 +16,7 @@ class StatBreakdownCard extends StatelessWidget {
   final String label;
   final int base;
   final int total;
+  final double? rawTotal;
   final List<Modifier> modifiers;
   final VoidCallback? onRoll;
 
@@ -48,7 +50,9 @@ class StatBreakdownCard extends StatelessWidget {
         children: [
           _row('Pontos investidos', base),
           for (final modifier in modifiers)
-            _row(modifier.sourceName, modifier.value.round()),
+            _row(modifier.sourceName, modifier.value),
+          if (rawTotal != null && rawTotal != total)
+            _row('Antes de arredondar', rawTotal!),
           const Divider(),
           _row('Valor atual', total, bold: true),
         ],
@@ -56,7 +60,7 @@ class StatBreakdownCard extends StatelessWidget {
     );
   }
 
-  Widget _row(String name, int value, {bool bold = false}) => Padding(
+  Widget _row(String name, num value, {bool bold = false}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(
       children: [
@@ -67,7 +71,7 @@ class StatBreakdownCard extends StatelessWidget {
           ),
         ),
         Text(
-          '${value >= 0 && name != 'Pontos investidos' && name != 'Valor atual' ? '+' : ''}$value',
+          '${value >= 0 && name != 'Pontos investidos' && name != 'Valor atual' && name != 'Antes de arredondar' ? '+' : ''}${value is int || value % 1 == 0 ? value.toInt() : value.toStringAsFixed(1).replaceAll('.', ',')}',
         ),
       ],
     ),

@@ -335,4 +335,16 @@ test('Elfo aplica Constituição, atributo versátil e exige conexão', () => {
   const invalid = validateCharacter({ ...character, raceAttributeChoice: '', raceConnection: '' }, { entries: [elf, neutralClass] });
   assert.ok(invalid.errors.some((message) => message.includes('atributo versátil')));
   assert.ok(invalid.errors.some((message) => message.includes('conexão racial')));
+
+  const swordsman = entryFor(classRules.find((rule) => rule.id === 'swordsman'));
+  const invested = recalculateCharacter({
+    ...emptyCharacter(), name: 'Aelar', raceId: elf.id, classId: swordsman.id,
+    raceAttributeChoice: 'dexterity', raceConnection: 'Seu arco ancestral',
+    attributes: { ...emptyCharacter().attributes, dexterity: 4 }, maxHp: 10,
+  }, { entries: [elf, swordsman] });
+  const dexterity = attributeBreakdown(invested, 'dexterity');
+  assert.equal(dexterity.rawTotal, 5.5);
+  assert.equal(dexterity.total, 5);
+  assert.equal(dexterity.modifiers.find((item) => item.sourceType === 'race_choice').value, .5);
+  assert.equal(evaluateRuleFormula({ base: 0, terms: [{ attribute: 'dexterity', weight: 1 }] }, invested), 5);
 });
