@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateAndNormalizeCharacter } from '../lib/characterRules.js';
+import { attributePointCost, validateAndNormalizeCharacter } from '../lib/characterRules.js';
 
 const metadata = (value) => ({ metadata: value, description: '' });
 
@@ -158,4 +158,81 @@ test('técnicas de combate preservam recarga apenas durante o combate', () => {
   }, catalog);
   assert.equal(resting.techniques[0].cooldownRemaining, 0);
   assert.equal(resting.techniques[0].usedThisCombat, false);
+});
+
+test('criação aceita dez pontos iniciais no mesmo atributo e exige vida oficial', () => {
+  const rules = {
+    ...characterClass,
+    metadata: {
+      ...characterClass.metadata,
+      hp: {
+        initial: { base: 10, terms: { constitution: 1 } },
+        perLevel: {
+          fixed: { base: 5, terms: { constitution: 1 } },
+          roll: { die: 8, base: 0, terms: { constitution: 1 } },
+          hybrid: { die: 4, base: 4, terms: { constitution: 1 } },
+        },
+      },
+    },
+  };
+  const officialCatalog = { entries: [race, rules] };
+  const creation = {
+    ...zenitti(),
+    attributes: { strength: 10, dexterity: 0, constitution: 0, intelligence: 0, charisma: 0, faith: 0 },
+    hpProgressionMode: 'fixed',
+    levelHistory: [{ level: 1, hpMethod: 'fixed', die: '', rollResult: null, hpAdded: 15 }],
+    maxHp: 15, currentHp: 15, currentMana: 0, resources: { humanity: 100, focoCurrent: 2 },
+  };
+  assert.equal(attributePointCost(creation.attributes), 10);
+  const created = validateAndNormalizeCharacter(creation, officialCatalog, { previous: null });
+  assert.equal(created.maxHp, 15);
+
+  const forgedLife = structuredClone(creation);
+  forgedLife.levelHistory[0].hpAdded = 9999;
+  assert.throws(() => validateAndNormalizeCharacter(forgedLife, officialCatalog, { previous: null }),
+    (error) => error.details.errors.some((message) => /vida adicionada/i.test(message)));
+
+  const forgedLevel = { ...creation, level: 10, classXp: 0 };
+  assert.throws(() => validateAndNormalizeCharacter(forgedLevel, officialCatalog, { previous: null }),
+    (error) => error.details.errors.some((message) => /nível 1/i.test(message)));
+
+  const rolledCreation = validateAndNormalizeCharacter({
+    ...creation, hpProgressionMode: 'roll', maxHp: 14, currentHp: 14,
+    levelHistory: [{ level: 1, hpMethod: 'roll', die: 'd8', rollResult: 4, hpAdded: 14 }],
+  }, officialCatalog, { previous: null });
+  const funded = { ...rolledCreation, classXp: 10, classXpTotal: 10 };
+  const next = {
+    ...funded, level: 2, classXp: 0, maxHp: 18, currentHp: 18,
+    levelHistory: [
+      { level: 2, hpMethod: 'roll', die: 'd8', rollResult: 4, hpAdded: 4, xpSpent: 10 },
+      ...funded.levelHistory,
+    ],
+  };
+  const advanced = validateAndNormalizeCharacter(next, officialCatalog, { previous: funded });
+  assert.equal(advanced.level, 2);
+  assert.equal(advanced.classXp, 0);
+
+  const changedHistory = structuredClone(funded);
+  changedHistory.levelHistory[0].hpAdded += 1;
+  assert.throws(() => validateAndNormalizeCharacter(changedHistory, officialCatalog, { previous: funded }),
+    (error) => error.details.errors.some((message) => /histórico de vida.*alterado/i.test(message)));
+
+  const legacy = structuredClone(created);
+  delete legacy.levelHistory[0].die;
+  delete legacy.levelHistory[0].xpSpent;
+  const resaved = structuredClone(legacy);
+  resaved.levelHistory[0].die = '';
+  resaved.levelHistory[0].xpSpent = 0;
+  assert.equal(validateAndNormalizeCharacter(resaved, officialCatalog, { previous: legacy }).maxHp, 15);
+
+  const forgedDie = structuredClone(next);
+  forgedDie.levelHistory[0].die = 'd100';
+  forgedDie.levelHistory[0].rollResult = 100;
+  forgedDie.levelHistory[0].hpAdded = 100;
+  assert.throws(() => validateAndNormalizeCharacter(forgedDie, officialCatalog, { previous: funded }),
+    (error) => error.details.errors.some((message) => /rolagem de vida/i.test(message)));
+
+  const freeLevel = { ...next, classXp: 10 };
+  assert.throws(() => validateAndNormalizeCharacter(freeLevel, officialCatalog, { previous: funded }),
+    (error) => error.details.errors.some((message) => /consumir 10 XP/i.test(message)));
 });

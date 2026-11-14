@@ -240,7 +240,7 @@ test('item personalizado aplica bônus somente quando equipado', () => {
 });
 
 test('limites, custos e validação de classe incompleta são aplicados', () => {
-  assert.deepEqual([0, 5, 6, 10, 11].map(attributePointCost), [1, 1, 2, 2, 5]);
+  assert.deepEqual([0, 4, 5, 9, 10, 11].map(attributePointCost), [1, 1, 2, 2, 5, 5]);
   assert.equal(spentInitialAttributePoints({ strength: 6, dexterity: 4 }), 10);
   assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(classXpRequired), [10, 15, 20, 25, 30, 35, 45, 50, 55, 75]);
   assert.equal(attributeBreakdown({ attributes: { faith: 40 }, modifiers: [] }, 'faith').total, 20);

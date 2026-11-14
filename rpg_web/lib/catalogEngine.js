@@ -530,8 +530,8 @@ export function skillValue(character, parsedSkill) {
 
 export function attributePointCost(currentValue) {
   const current = Number(currentValue || 0);
-  if (current <= 5) return 1;
-  if (current <= 10) return 2;
+  if (current < 5) return 1;
+  if (current < 10) return 2;
   return 5;
 }
 

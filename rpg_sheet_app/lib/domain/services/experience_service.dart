@@ -73,8 +73,8 @@ class ExperienceService {
   }[currentLevel.clamp(1, 10)]!;
 
   int developmentAttributeCost(int currentValue) {
-    if (currentValue <= 5) return 1;
-    if (currentValue <= 10) return 2;
+    if (currentValue < 5) return 1;
+    if (currentValue < 10) return 2;
     return 5;
   }
 

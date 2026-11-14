@@ -68,6 +68,6 @@ test('consolida saldos antigos em XP e Pontos de Desenvolvimento', () => {
   assert.deepEqual(migrated.areaExperience, {});
 });
 
-test('custos de atributo respeitam as faixas inclusivas', () => {
-  assert.deepEqual([0, 5, 6, 10, 11, 20].map(developmentAttributeCost), [1, 1, 2, 2, 5, 5]);
+test('custos de atributo usam a faixa do próximo ponto', () => {
+  assert.deepEqual([0, 4, 5, 9, 10, 11, 20].map(developmentAttributeCost), [1, 1, 2, 2, 5, 5, 5]);
 });

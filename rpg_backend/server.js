@@ -638,14 +638,14 @@ async function saveCharacter(character, user, options = {}) {
     user.id,
     {
       baseRevision,
-      prepare: (merged) => validateAndNormalizeCharacter(prepareCharacterForStorage({
+      prepare: (merged, { current }) => validateAndNormalizeCharacter(prepareCharacterForStorage({
         ...merged,
         id: character.id,
         ownerUserId: user.id,
         visibility: normalizeVisibility(merged.visibility || merged.isPrivate),
         isPrivate: normalizeVisibility(merged.visibility || merged.isPrivate) === 'private',
         updatedAt: new Date().toISOString(),
-      }), catalog),
+      }), catalog, { previous: current }),
     },
   );
 }

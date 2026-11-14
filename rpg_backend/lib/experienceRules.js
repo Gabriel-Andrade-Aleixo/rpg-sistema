@@ -52,8 +52,8 @@ function correctPreviousRedistribution(character) {
 
 export function developmentAttributeCost(currentValue) {
   const value = Number(currentValue) || 0;
-  if (value <= 5) return 1;
-  if (value <= 10) return 2;
+  if (value < 5) return 1;
+  if (value < 10) return 2;
   return 5;
 }
 

@@ -1,5 +1,5 @@
 import { normalizeText, normalizeVisibility } from './catalogStore.js';
-import { EXPERIENCE_SYSTEM_VERSION, migrateExperienceSystem } from './experienceRules.js';
+import { EXPERIENCE_SYSTEM_VERSION, classXpRequired, migrateExperienceSystem } from './experienceRules.js';
 
 const attributeIds = ['strength', 'dexterity', 'constitution', 'intelligence', 'charisma', 'faith'];
 const resourceLimits = {
@@ -7,7 +7,7 @@ const resourceLimits = {
   deathSuccesses: [0, 3], deathFailures: [0, 3], dead: [0, 1], luck: [0, 3],
 };
 
-export function validateAndNormalizeCharacter(raw, catalog) {
+export function validateAndNormalizeCharacter(raw, catalog, { previous } = {}) {
   const character = migrateExperienceSystem(raw);
   const errors = [];
   const entries = Array.isArray(catalog?.entries) ? catalog.entries : [];
@@ -59,6 +59,9 @@ export function validateAndNormalizeCharacter(raw, catalog) {
   }
 
   character.levelHistory = validateLevelHistory(character.levelHistory, character.level, errors);
+  if (previous !== undefined) {
+    validateProgression(character, previous, classRules, attributeBonuses, errors);
+  }
   const recordedHp = character.levelHistory.reduce((sum, entry) => sum + entry.hpAdded, 0);
   character.maxHp = boundedInteger(character.maxHp, 0, 100000, 'Vida máxima', errors);
   if (recordedHp > 0 && character.maxHp !== recordedHp) {
@@ -105,10 +108,7 @@ export function validateAndNormalizeCharacter(raw, catalog) {
 }
 
 export function attributePointCost(attributes) {
-  return attributeIds.reduce((total, id) => {
-    const value = Number(attributes?.[id] || 0);
-    return total + Math.min(value, 5) + Math.max(0, value - 5) * 2;
-  }, 0);
+  return attributeIds.reduce((total, id) => total + Number(attributes?.[id] || 0), 0);
 }
 
 function normalizeAttributes(raw, errors) {
@@ -275,6 +275,103 @@ function validateLevelHistory(values, level, errors) {
   });
   if (result.length && !seen.has(1)) errors.push('O histórico de vida precisa começar no nível 1.');
   return result;
+}
+
+function validateProgression(character, previous, classRules, attributeBonuses, errors) {
+  const oldLevel = previous ? Number(previous.level) : 0;
+  if (previous && (character.level < oldLevel || character.level > oldLevel + 1)) {
+    errors.push('O nível só pode avançar uma etapa por vez.');
+  }
+  if (!previous && character.level !== 1) {
+    errors.push('Uma nova ficha deve começar no nível 1.');
+  }
+
+  const oldHistory = Array.isArray(previous?.levelHistory) ? previous.levelHistory : [];
+  const previousMethod = String(previous?.hpProgressionMode || oldHistory.find((entry) => entry.level === 1)?.hpMethod || '')
+    .replace(/^initial_/, '').replace(/^base$/, 'fixed');
+  const currentMethod = String(character.hpProgressionMode || previousMethod || '')
+    .replace(/^initial_/, '').replace(/^base$/, 'fixed');
+  if (previousMethod && currentMethod !== previousMethod) {
+    errors.push('O método de vida escolhido na criação não pode ser alterado.');
+  }
+  for (const oldRecord of oldHistory) {
+    const currentRecord = character.levelHistory.find((record) => record.level === oldRecord.level);
+    if (!currentRecord || !sameHealthRecord(currentRecord, oldRecord)) {
+      errors.push(`O histórico de vida do nível ${oldRecord.level} não pode ser alterado.`);
+    }
+  }
+  if (previous && character.level === oldLevel) {
+    if (character.levelHistory.length !== oldHistory.length) {
+      errors.push('O histórico de vida só pode crescer ao subir de nível.');
+    }
+    if (!oldHistory.length && Number(character.maxHp) > Number(previous.maxHp || 0)) {
+      errors.push('A vida máxima não pode aumentar sem subir de nível.');
+    }
+    return;
+  }
+
+  const newLevel = character.level;
+  const record = character.levelHistory.find((entry) => entry.level === newLevel);
+  if (!record || character.levelHistory.length !== oldHistory.length + 1) {
+    errors.push(`Registre a vida do nível ${newLevel} no histórico.`);
+    return;
+  }
+  const method = String(record.hpMethod || '').replace(/^initial_/, '');
+  if (!['fixed', 'roll', 'hybrid'].includes(method)) {
+    errors.push(`O método de vida do nível ${newLevel} é inválido.`);
+    return;
+  }
+  const selectedMethod = previousMethod || currentMethod || method;
+  if (method !== selectedMethod) errors.push('O método de vida deve ser o escolhido na criação.');
+  const hpRules = classRules.hp;
+  const progression = hpRules?.perLevel?.[method];
+  if (!hpRules?.initial || !progression) {
+    errors.push('A classe não possui regras completas de vida para este método.');
+    return;
+  }
+  const die = Number(progression.die || 0);
+  if (method === 'fixed') {
+    if (record.die || record.rollResult !== null) errors.push('Vida fixa não pode ter rolagem.');
+  } else if (String(record.die || '') !== `d${die}` || !Number.isInteger(record.rollResult) || record.rollResult < 1 || record.rollResult > die) {
+    errors.push(`A rolagem de vida deve ser um resultado válido de d${die}.`);
+  }
+  const expectedHp = (previous ? 0 : evaluateFormula(hpRules.initial, character.attributes, attributeBonuses))
+    + evaluateFormula(progression, character.attributes, attributeBonuses)
+    + (method === 'fixed' ? 0 : Number(record.rollResult || 0));
+  if (record.hpAdded !== expectedHp) {
+    errors.push(`A vida adicionada no nível ${newLevel} deve ser ${expectedHp}.`);
+  }
+
+  if (previous) {
+    const cost = classXpRequired(oldLevel);
+    const oldExperience = migrateExperienceSystem(previous);
+    const gained = Number(character.classXpTotal || 0) - Number(oldExperience.classXpTotal || 0);
+    if (record.xpSpent !== cost || gained < 0 || Number(character.classXp) !== Number(oldExperience.classXp || 0) + gained - cost) {
+      errors.push(`Subir para o nível ${newLevel} exige consumir ${cost} XP de Classe.`);
+    }
+    if (gained > 0) {
+      const previousIds = new Set((oldExperience.classXpHistory || []).map((entry) => entry.id));
+      const recordedGain = (character.classXpHistory || [])
+        .filter((entry) => !previousIds.has(entry.id))
+        .reduce((total, entry) => total + Number(entry.amount || 0), 0);
+      if (recordedGain !== gained) errors.push('O XP ganho ao subir de nível precisa constar no histórico de Classe.');
+    }
+    if (Number(character.maxHp) !== Number(previous.maxHp || 0) + record.hpAdded) {
+      errors.push('A vida máxima deve somar apenas a vida do novo nível.');
+    }
+  } else if (Number(character.maxHp) !== record.hpAdded) {
+    errors.push('A vida máxima inicial deve corresponder ao histórico do nível 1.');
+  }
+}
+
+function sameHealthRecord(left, right) {
+  return left.level === right.level
+    && String(left.hpMethod || 'fixed').replace(/^initial_/, '').replace(/^base$/, 'fixed')
+      === String(right.hpMethod || 'fixed').replace(/^initial_/, '').replace(/^base$/, 'fixed')
+    && String(left.die || '') === String(right.die || '')
+    && (left.rollResult ?? null) === (right.rollResult ?? null)
+    && left.hpAdded === right.hpAdded
+    && Number(left.xpSpent || 0) === Number(right.xpSpent || 0);
 }
 
 function normalizeResources(raw, classRules, attributes, bonuses, errors) {

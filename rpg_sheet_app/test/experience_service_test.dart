@@ -41,6 +41,13 @@ void main() {
     expect(updated.classXpHistory.single.note, 'Sessão 1');
   });
 
+  test('custo de PD muda ao comprar o sexto e o décimo primeiro ponto', () {
+    expect(experience.developmentAttributeCost(4), 1);
+    expect(experience.developmentAttributeCost(5), 2);
+    expect(experience.developmentAttributeCost(9), 2);
+    expect(experience.developmentAttributeCost(10), 5);
+  });
+
   test('XP de Desenvolvimento converte em PD e compra perícia', () {
     var updated = experience.registerDevelopmentXp(character(), 9, 'Combate');
     expect(updated.developmentXp, 4);
